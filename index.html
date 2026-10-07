@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>finalarc</title>
+  <meta name="description" content="finalarc — roblox & discord, live.">
+  <meta name="theme-color" content="#060608">
+  <meta property="og:title" content="finalarc">
+  <meta property="og:description" content="roblox & discord, live.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23060608'/%3E%3Cpath d='M14 46a18 18 0 0 1 36 0' fill='none' stroke='%23ff4b2b' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500;600;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="is-loading">
+
+  <!-- background artwork -->
+  <canvas id="gl" aria-hidden="true"></canvas>
+  <div class="bg-fallback" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <!-- cursor -->
+  <div class="cursor" aria-hidden="true"><div class="cursor__dot"></div><div class="cursor__ring"><span class="cursor__label"></span></div></div>
+
+  <!-- intro / enter gate -->
+  <div class="gate" id="gate">
+    <div class="gate__panel gate__panel--top"></div>
+    <div class="gate__panel gate__panel--bot"></div>
+    <div class="gate__inner">
+      <div class="gate__count"><span id="gateCount">000</span><sup>%</sup></div>
+      <div class="gate__bar"><span id="gateBar"></span></div>
+      <div class="gate__meta mono"><span>finalarc</span><span id="gateStatus">syncing roblox</span></div>
+      <button class="gate__enter" id="gateEnter" type="button" data-cursor="enter">
+        <span class="gate__enter-txt">click to enter</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- chrome -->
+  <header class="nav">
+    <a href="#top" class="nav__logo" data-cursor="top" aria-label="Back to top">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M8 30a12 12 0 0 1 24 0" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><circle cx="20" cy="30" r="2.4" fill="currentColor"/></svg>
+    </a>
+    <nav class="nav__links mono" aria-label="Sections">
+      <a href="#stats" data-cursor="go">stats</a>
+      <a href="#avatar" data-cursor="go">avatar</a>
+      <a href="#vault" data-cursor="go">vault</a>
+      <a href="#discord" data-cursor="go">discord</a>
+    </nav>
+    <div class="nav__meta mono"><span class="nav__section" id="navSection">00 / intro</span><span class="nav__clock" id="clock">--:--:--</span></div>
+  </header>
+  <div class="progress" aria-hidden="true"><span id="progress"></span></div>
+
+  <main id="top">
+
+    <!-- 01 HERO -->
+    <section class="hero" id="hero" data-label="00 / intro">
+      <div class="hero__kicker mono" data-reveal>
+        <span class="dot dot--live"></span> live profile — roblox × discord
+      </div>
+
+      <h1 class="hero__title" aria-label="finalarc">
+        <span class="hero__line hero__line--1" data-split="chars">FINAL</span>
+        <span class="hero__line hero__line--2"><em class="serif" data-split="chars">the</em><span class="outline" data-split="chars">ARC</span></span>
+      </h1>
+
+      <div class="hero__grid">
+        <article class="card profile" data-tilt>
+          <div class="profile__glow"></div>
+          <div class="profile__head">
+            <div class="profile__avatar">
+              <img id="rbxHeadshot" alt="" decoding="async">
+              <span class="profile__ring"></span>
+              <span class="status-dot" id="heroStatus" title="discord status"></span>
+            </div>
+            <div class="profile__who">
+              <div class="profile__name"><span id="rbxDisplay">finalarc</span><svg class="verified" id="rbxVerified" viewBox="0 0 24 24" hidden><path d="M12 2l2.4 1.8 3-.2 1 2.8 2.6 1.6-.7 2.9 1.2 2.8-2.2 2 .1 3-2.9.8-1.5 2.6-2.9-.8L12 22l-2.1-2.1-2.9.8-1.5-2.6-2.9-.8.1-3-2.2-2 1.2-2.8-.7-2.9L3.6 5l1-2.8 3 .2z" fill="currentColor"/><path d="M8 12.2l2.6 2.6L16.2 9" fill="none" stroke="#060608" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              <div class="profile__handle mono">@<span id="rbxUser">…</span></div>
+            </div>
+          </div>
+          <p class="profile__bio" id="rbxBio">loading the story…</p>
+          <div class="profile__chips mono">
+            <span class="chip"><i>joined</i><b id="chipJoined">—</b></span>
+            <span class="chip"><i>age</i><b id="chipAge">—</b></span>
+            <span class="chip"><i>badges</i><b id="chipBadges">—</b></span>
+          </div>
+          <div class="profile__links">
+            <a class="btn btn--solid" id="rbxLink" href="https://www.roblox.com/users/461323235/profile" target="_blank" rel="noopener" data-cursor="open" data-magnetic>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.2 2 2 18.8 18.8 22 22 5.2zm8.6 12.8-4.6-1 1-4.6 4.6 1z" fill="currentColor"/></svg>
+              roblox
+            </a>
+            <button class="btn" type="button" data-copy="finalarcuser" data-cursor="copy" data-magnetic>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.6 5.4A17 17 0 0 0 15.4 4l-.5 1a15.6 15.6 0 0 0-5.8 0l-.5-1a17 17 0 0 0-4.2 1.4C1.7 9.4 1 13.3 1.3 17.2a17 17 0 0 0 5.2 2.6l1.1-1.8a11 11 0 0 1-1.7-.8l.4-.3a12.2 12.2 0 0 0 11.4 0l.4.3a11 11 0 0 1-1.7.8l1.1 1.8a17 17 0 0 0 5.2-2.6c.4-4.5-.7-8.4-3.1-11.8zM8.7 14.8c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1zm6.6 0c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1z" fill="currentColor"/></svg>
+              <span class="btn__txt">finalarcuser</span>
+            </button>
+          </div>
+        </article>
+
+        <div class="hero__meta mono" data-reveal>
+          <div class="meta-row"><i>roblox id</i><b>461323235</b></div>
+          <div class="meta-row"><i>discord</i><b>finalarcuser</b></div>
+          <div class="meta-row"><i>status</i><b id="heroStatusTxt">checking…</b></div>
+          <div class="meta-row"><i>local time</i><b id="clock2">--:--</b></div>
+        </div>
+      </div>
+
+      <div class="hero__scroll mono" aria-hidden="true"><span>scroll</span><i></i></div>
+    </section>
+
+    <!-- 02 MANIFESTO -->
+    <section class="scene manifesto" data-scene="manifesto" data-label="01 / about">
+      <div class="sticky">
+        <div class="manifesto__eyebrow mono"><span class="idx">01</span> the profile</div>
+        <p class="manifesto__text" id="manifesto">Not a template. Not a link dump. One profile, wired straight into live Roblox and Discord data — built for a single user and designed to move every time you scroll.</p>
+        <svg class="manifesto__arc" viewBox="0 0 600 300" aria-hidden="true"><path id="arcPath" d="M30 290a270 270 0 0 1 540 0" fill="none"/><path class="manifesto__arc-line" d="M30 290a270 270 0 0 1 540 0" fill="none"/></svg>
+      </div>
+    </section>
+
+    <!-- 03 STATS (horizontal) -->
+    <section class="scene stats" id="stats" data-scene="stats" data-label="02 / stats">
+      <div class="sticky">
+        <div class="stats__track" id="statsTrack">
+          <div class="stats__intro">
+            <div class="mono eyebrow"><span class="idx">02</span> roblox, by the numbers</div>
+            <h2 class="display">the <em class="serif">numbers</em><br>don't lie.</h2>
+            <p class="lede">Pulled live from Roblox the moment you landed here. Keep scrolling →</p>
+          </div>
+          <article class="stat card" data-stat="age"><div class="stat__k mono">account age</div><div class="stat__v"><span data-num id="sAge">0</span><small>days</small></div><div class="stat__f mono" id="sAgeF">—</div><div class="stat__bar"><span id="sAgeBar"></span></div></article>
+          <article class="stat card" data-stat="friends"><div class="stat__k mono">friends</div><div class="stat__v"><span data-num id="sFriends">0</span></div><div class="stat__f mono">mutual connections</div></article>
+          <article class="stat card" data-stat="followers"><div class="stat__k mono">followers</div><div class="stat__v"><span data-num id="sFollowers">0</span></div><div class="stat__f mono" id="sRatio">—</div></article>
+          <article class="stat card" data-stat="following"><div class="stat__k mono">following</div><div class="stat__v"><span data-num id="sFollowing">0</span></div><div class="stat__f mono">accounts watched</div></article>
+          <article class="stat card" data-stat="badges"><div class="stat__k mono">badges earned</div><div class="stat__v"><span data-num id="sBadges">0</span><small id="sBadgesPlus"></small></div><div class="stat__f mono" id="sBadgeRate">—</div></article>
+          <article class="stat card" data-stat="groups"><div class="stat__k mono">groups</div><div class="stat__v"><span data-num id="sGroups">0</span></div><div class="stat__f mono" id="sTopGroup">—</div></article>
+          <article class="stat card" data-stat="visits"><div class="stat__k mono">place visits</div><div class="stat__v"><span data-num id="sVisits">0</span></div><div class="stat__f mono" id="sGames">—</div></article>
+          <article class="stat card" data-stat="names"><div class="stat__k mono">past usernames</div><div class="stat__v"><span data-num id="sNames">0</span></div><div class="stat__f mono" id="sNamesF">—</div></article>
+          <div class="stats__end display"><em class="serif">and</em> counting.</div>
+        </div>
+        <div class="stats__hud mono"><span id="statsIdx">01</span><i><b id="statsBar"></b></i><span>08</span></div>
+      </div>
+    </section>
+
+    <!-- 04 AVATAR -->
+    <section class="scene avatar" id="avatar" data-scene="avatar" data-label="03 / avatar">
+      <div class="sticky">
+        <div class="avatar__bgword outline" aria-hidden="true">AVATAR</div>
+        <svg class="avatar__ring" viewBox="0 0 500 500" aria-hidden="true">
+          <defs><path id="ringPath" d="M250 250m-210 0a210 210 0 1 1 420 0a210 210 0 1 1-420 0"/></defs>
+          <text><textPath href="#ringPath" id="ringText">FINALARC ✦ ROBLOX ✦ DISCORD ✦ FINALARCUSER ✦ LIVE PROFILE ✦ </textPath></text>
+        </svg>
+        <div class="avatar__stage">
+          <div class="avatar__halo"></div>
+          <img id="rbxAvatar" alt="Roblox avatar" decoding="async">
+          <div class="avatar__floor"></div>
+        </div>
+        <div class="avatar__cap avatar__cap--l">
+          <div class="mono eyebrow"><span class="idx">03</span> the fit</div>
+          <h2 class="display">current<br><em class="serif">avatar</em></h2>
+        </div>
+        <div class="avatar__cap avatar__cap--r mono" id="avatarMeta">
+          <div class="meta-row"><i>display</i><b id="aDisplay">—</b></div>
+          <div class="meta-row"><i>username</i><b id="aUser">—</b></div>
+          <div class="meta-row"><i>created</i><b id="aCreated">—</b></div>
+          <div class="meta-row"><i>weekday</i><b id="aWeekday">—</b></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 05 INSIGHTS -->
+    <section class="insights" data-label="04 / insights">
+      <div class="wrap">
+        <div class="mono eyebrow" data-reveal><span class="idx">04</span> read between the stats</div>
+        <h2 class="display" data-split="words">insights.</h2>
+        <ol class="insights__list" id="insightsList">
+          <li class="insight" data-reveal><span class="insight__n mono">i</span><p>Crunching the numbers…</p></li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- 06 VAULT -->
+    <section class="vault" id="vault" data-label="05 / vault">
+      <div class="wrap">
+        <div class="vault__head">
+          <div>
+            <div class="mono eyebrow" data-reveal><span class="idx">05</span> the vault</div>
+            <h2 class="display" data-split="words">recent badges</h2>
+          </div>
+          <p class="lede" data-reveal>The latest badges earned across Roblox experiences. Hover to inspect.</p>
+        </div>
+        <div class="badges" id="badges"></div>
+
+        <div class="vault__head vault__head--groups">
+          <h2 class="display" data-split="words">groups</h2>
+          <p class="lede" data-reveal>Communities and the rank held in each.</p>
+        </div>
+        <ul class="groups" id="groups"></ul>
+      </div>
+    </section>
+
+    <!-- 07 DISCORD -->
+    <section class="discord" id="discord" data-label="06 / discord">
+      <div class="wrap">
+        <div class="mono eyebrow" data-reveal><span class="idx">06</span> find me on discord</div>
+        <h2 class="display discord__title" data-split="words">say hi.</h2>
+
+        <article class="card dc" id="dc" data-tilt>
+          <div class="dc__banner"><div class="dc__banner-art"></div></div>
+          <div class="dc__body">
+            <div class="dc__avatar">
+              <img id="dcAvatar" alt="" decoding="async">
+              <span class="dc__initial" id="dcInitial">F</span>
+              <span class="status-dot status-dot--lg" id="dcStatus"></span>
+            </div>
+            <div class="dc__who">
+              <div class="dc__name" id="dcName">finalarcuser</div>
+              <div class="dc__user mono" id="dcUser">finalarcuser</div>
+            </div>
+            <div class="dc__custom" id="dcCustom"></div>
+            <div class="dc__activity" id="dcActivity">
+              <div class="dc__label mono">status</div>
+              <div class="dc__act-empty" id="dcState">checking presence…</div>
+            </div>
+            <div class="dc__actions">
+              <button class="btn btn--solid" type="button" data-copy="finalarcuser" data-cursor="copy" data-magnetic><span class="btn__txt">copy username</span></button>
+              <a class="btn" href="https://discord.com/users/1453897439043125350" target="_blank" rel="noopener" data-cursor="open" data-magnetic>open profile ↗</a>
+            </div>
+            <div class="dc__id mono">id · 1453897439043125350</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 08 FOOTER -->
+    <footer class="foot" data-label="07 / end">
+      <div class="marquee" aria-hidden="true"><div class="marquee__inner" id="marquee"><span>FINALARC</span><i>✦</i><span class="outline">FINALARC</span><i>✦</i><span>FINALARC</span><i>✦</i><span class="outline">FINALARC</span><i>✦</i></div></div>
+      <div class="foot__row wrap mono">
+        <span>© <span id="year">2026</span> finalarc</span>
+        <span class="foot__links">
+          <a href="https://www.roblox.com/users/461323235/profile" target="_blank" rel="noopener" data-cursor="open">roblox ↗</a>
+          <a href="https://discord.com/users/1453897439043125350" target="_blank" rel="noopener" data-cursor="open">discord ↗</a>
+          <a href="#top" data-cursor="top">top ↑</a>
+        </span>
+        <span id="updated">live data</span>
+      </div>
+    </footer>
+  </main>
+
+  <div class="toast mono" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="main.js" defer></script>
+</body>
+</html>
