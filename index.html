@@ -21,6 +21,7 @@
   <div class="bg-fallback" aria-hidden="true"></div>
   <div class="grain" aria-hidden="true"></div>
   <div class="vignette" aria-hidden="true"></div>
+  <div class="bloodwash" aria-hidden="true"></div>
 
   <!-- cursor -->
   <div class="cursor" aria-hidden="true"><div class="cursor__dot"></div><div class="cursor__ring"><span class="cursor__label"></span></div></div>
@@ -46,7 +47,8 @@
     </a>
     <nav class="nav__links mono" aria-label="Sections">
       <a href="#stats" data-cursor="go">stats</a>
-      <a href="#avatar" data-cursor="go">avatar</a>
+      <a href="#game" data-cursor="go">the game</a>
+      <a href="#closet" data-cursor="go">closet</a>
       <a href="#vault" data-cursor="go">vault</a>
       <a href="#discord" data-cursor="go">discord</a>
     </nav>
@@ -134,16 +136,75 @@
           <article class="stat card" data-stat="following"><div class="stat__k mono">following</div><div class="stat__v"><span data-num id="sFollowing">0</span></div><div class="stat__f mono">accounts watched</div></article>
           <article class="stat card" data-stat="badges"><div class="stat__k mono">badges earned</div><div class="stat__v"><span data-num id="sBadges">0</span><small id="sBadgesPlus"></small></div><div class="stat__f mono" id="sBadgeRate">—</div></article>
           <article class="stat card" data-stat="groups"><div class="stat__k mono">groups</div><div class="stat__v"><span data-num id="sGroups">0</span></div><div class="stat__f mono" id="sTopGroup">—</div></article>
-          <article class="stat card" data-stat="visits"><div class="stat__k mono">place visits</div><div class="stat__v"><span data-num id="sVisits">0</span></div><div class="stat__f mono" id="sGames">—</div></article>
+          <article class="stat card stat--hot" data-stat="peak"><div class="stat__k mono">peak players <span class="tag">og game</span></div><div class="stat__v"><span data-num id="sPeak" data-to="497">0</span><small>ccu</small></div><div class="stat__f mono">concurrent, before the takedown</div></article>
+          <article class="stat card stat--hot" data-stat="lifetime"><div class="stat__k mono">lifetime visits <span class="tag">og game</span></div><div class="stat__v"><span data-num id="sLifetime" data-to="500000">0</span><small>+</small></div><div class="stat__f mono">gone in one moderation call</div></article>
+          <article class="stat card" data-stat="visits"><div class="stat__k mono">live visits</div><div class="stat__v"><span data-num id="sVisits">0</span></div><div class="stat__f mono" id="sGames">—</div></article>
           <article class="stat card" data-stat="names"><div class="stat__k mono">past usernames</div><div class="stat__v"><span data-num id="sNames">0</span></div><div class="stat__f mono" id="sNamesF">—</div></article>
           <div class="stats__end display"><em class="serif">and</em> counting.</div>
         </div>
-        <div class="stats__hud mono"><span id="statsIdx">01</span><i><b id="statsBar"></b></i><span>08</span></div>
+        <div class="stats__hud mono"><span id="statsIdx">01</span><i><b id="statsBar"></b></i><span id="statsTotal">10</span></div>
       </div>
     </section>
 
-    <!-- 04 AVATAR -->
-    <section class="scene avatar" id="avatar" data-scene="avatar" data-label="03 / avatar">
+    <!-- 04 THE GAME (saga) -->
+    <section class="scene saga" id="game" data-scene="saga" data-label="03 / the game">
+      <div class="sticky">
+        <div class="saga__drips" id="drips" aria-hidden="true"></div>
+        <svg class="saga__chart" viewBox="0 0 1000 400" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="riseGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff8a3d" stop-opacity=".35"/><stop offset="1" stop-color="#ff8a3d" stop-opacity="0"/></linearGradient>
+          </defs>
+          <g class="saga__grid"><path d="M0 100H1000M0 200H1000M0 300H1000" vector-effect="non-scaling-stroke"/></g>
+          <path class="saga__area" d="M0 392 C 120 388, 200 370, 280 330 S 420 180, 470 120 S 540 40, 580 28 L 580 400 L 0 400 Z" fill="url(#riseGrad)"/>
+          <path class="saga__line saga__line--rise" pathLength="1" vector-effect="non-scaling-stroke" d="M0 392 C 120 388, 200 370, 280 330 S 420 180, 470 120 S 540 40, 580 28"/>
+          <path class="saga__line saga__line--fall" pathLength="1" vector-effect="non-scaling-stroke" d="M580 28 L 596 120 L 588 150 L 606 398"/>
+          <path class="saga__line saga__line--re" pathLength="1" vector-effect="non-scaling-stroke" d="M640 398 C 700 396, 740 384, 790 380 S 880 372, 920 366 S 980 360, 1000 356"/>
+        </svg>
+        <div class="saga__peak mono" aria-hidden="true"><i></i>peak · 497 ccu</div>
+        <div class="saga__splats" id="splats" aria-hidden="true"></div>
+
+        <div class="saga__chap" data-ch="0">
+          <div class="mono eyebrow"><span class="idx">03</span> chapter i — the rise</div>
+          <h2 class="display">it <em class="serif">blew up.</em></h2>
+          <div class="saga__nums">
+            <div><b data-num data-to="497">0</b><i class="mono">peak concurrent players</i></div>
+            <div><b data-num data-to="500000" data-compact>0</b><i class="mono">visits</i></div>
+          </div>
+        </div>
+
+        <div class="saga__chap" data-ch="1">
+          <div class="mono eyebrow"><span class="idx">03</span> chapter ii — the sign</div>
+          <h2 class="display">one <em class="serif">sign.</em></h2>
+          <div class="saga__sign" aria-label="the in-game sign">
+            <div class="saga__sign-board">
+              <span class="mono">notice</span>
+              <strong>find a bug →<br>earn robux</strong>
+            </div>
+            <div class="saga__sign-post"></div>
+          </div>
+          <p class="lede">A single in-game sign offered Robux rewards for reporting bugs. Roblox read it as a rule break.</p>
+        </div>
+
+        <div class="saga__chap saga__chap--fall" data-ch="2">
+          <div class="mono eyebrow"><span class="idx">03</span> chapter iii — the fall</div>
+          <div class="saga__stamp" data-text="TAKEN DOWN">TAKEN DOWN</div>
+          <p class="saga__epitaph"><b>497</b> players. <b>500,000</b> visits. <em class="serif">butchered overnight.</em></p>
+        </div>
+
+        <div class="saga__chap" data-ch="3">
+          <div class="mono eyebrow"><span class="idx">03</span> chapter iv — the reupload</div>
+          <h2 class="display">back, <em class="serif">quieter.</em></h2>
+          <p class="lede">Rebuilt and reuploaded. It hasn't hit the old numbers yet, but the people who built it once are still building. <span class="saga__live mono" id="reVisits"></span></p>
+        </div>
+
+        <div class="saga__hud mono" aria-hidden="true">
+          <span data-hud="0">i · rise</span><span data-hud="1">ii · sign</span><span data-hud="2">iii · fall</span><span data-hud="3">iv · reupload</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 05 AVATAR -->
+    <section class="scene avatar" id="avatar" data-scene="avatar" data-label="04 / avatar">
       <div class="sticky">
         <div class="avatar__bgword outline" aria-hidden="true">AVATAR</div>
         <svg class="avatar__ring" viewBox="0 0 500 500" aria-hidden="true">
@@ -156,7 +217,7 @@
           <div class="avatar__floor"></div>
         </div>
         <div class="avatar__cap avatar__cap--l">
-          <div class="mono eyebrow"><span class="idx">03</span> the fit</div>
+          <div class="mono eyebrow"><span class="idx">04</span> the fit</div>
           <h2 class="display">current<br><em class="serif">avatar</em></h2>
         </div>
         <div class="avatar__cap avatar__cap--r mono" id="avatarMeta">
@@ -168,10 +229,33 @@
       </div>
     </section>
 
-    <!-- 05 INSIGHTS -->
-    <section class="insights" data-label="04 / insights">
+    <!-- 06 CLOSET -->
+    <section class="closet" id="closet" data-label="05 / closet">
       <div class="wrap">
-        <div class="mono eyebrow" data-reveal><span class="idx">04</span> read between the stats</div>
+        <div class="closet__head">
+          <div>
+            <div class="mono eyebrow" data-reveal><span class="idx">05</span> the closet</div>
+            <h2 class="display" data-split="words">the drip.</h2>
+          </div>
+          <div class="closet__total" data-reveal>
+            <div class="mono">worn value, listed pieces</div>
+            <div class="closet__sum"><span class="rbx">R$</span><span id="closetTotal" data-num data-to="0">0</span><sup>+</sup></div>
+            <div class="mono closet__usd" id="closetUsd"></div>
+          </div>
+        </div>
+        <div class="items" id="items"></div>
+        <p class="closet__note mono" data-reveal>just a few of the assets to the name. prices are approximate.</p>
+        <div class="wearing" id="wearingWrap" hidden>
+          <div class="mono eyebrow"><span class="idx">↳</span> on the avatar right now</div>
+          <div class="wearing__row" id="wearing"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 07 INSIGHTS -->
+    <section class="insights" data-label="06 / insights">
+      <div class="wrap">
+        <div class="mono eyebrow" data-reveal><span class="idx">06</span> read between the stats</div>
         <h2 class="display" data-split="words">insights.</h2>
         <ol class="insights__list" id="insightsList">
           <li class="insight" data-reveal><span class="insight__n mono">i</span><p>Crunching the numbers…</p></li>
@@ -179,12 +263,12 @@
       </div>
     </section>
 
-    <!-- 06 VAULT -->
-    <section class="vault" id="vault" data-label="05 / vault">
+    <!-- 08 VAULT -->
+    <section class="vault" id="vault" data-label="07 / vault">
       <div class="wrap">
         <div class="vault__head">
           <div>
-            <div class="mono eyebrow" data-reveal><span class="idx">05</span> the vault</div>
+            <div class="mono eyebrow" data-reveal><span class="idx">07</span> the vault</div>
             <h2 class="display" data-split="words">recent badges</h2>
           </div>
           <p class="lede" data-reveal>The latest badges earned across Roblox experiences. Hover to inspect.</p>
@@ -199,41 +283,18 @@
       </div>
     </section>
 
-    <!-- 07 DISCORD -->
-    <section class="discord" id="discord" data-label="06 / discord">
+    <!-- 09 DISCORD -->
+    <section class="discord" id="discord" data-label="08 / discord">
       <div class="wrap">
-        <div class="mono eyebrow" data-reveal><span class="idx">06</span> find me on discord</div>
+        <div class="mono eyebrow" data-reveal><span class="idx">08</span> find me on discord</div>
         <h2 class="display discord__title" data-split="words">say hi.</h2>
 
-        <article class="card dc" id="dc" data-tilt>
-          <div class="dc__banner"><div class="dc__banner-art"></div></div>
-          <div class="dc__body">
-            <div class="dc__avatar">
-              <img id="dcAvatar" alt="" decoding="async">
-              <span class="dc__initial" id="dcInitial">F</span>
-              <span class="status-dot status-dot--lg" id="dcStatus"></span>
-            </div>
-            <div class="dc__who">
-              <div class="dc__name" id="dcName">finalarcuser</div>
-              <div class="dc__user mono" id="dcUser">finalarcuser</div>
-            </div>
-            <div class="dc__custom" id="dcCustom"></div>
-            <div class="dc__activity" id="dcActivity">
-              <div class="dc__label mono">status</div>
-              <div class="dc__act-empty" id="dcState">checking presence…</div>
-            </div>
-            <div class="dc__actions">
-              <button class="btn btn--solid" type="button" data-copy="finalarcuser" data-cursor="copy" data-magnetic><span class="btn__txt">copy username</span></button>
-              <a class="btn" href="https://discord.com/users/1453897439043125350" target="_blank" rel="noopener" data-cursor="open" data-magnetic>open profile ↗</a>
-            </div>
-            <div class="dc__id mono">id · 1453897439043125350</div>
-          </div>
-        </article>
+        <div class="dc-duo" id="dcDuo"></div>
       </div>
     </section>
 
-    <!-- 08 FOOTER -->
-    <footer class="foot" data-label="07 / end">
+    <!-- 10 FOOTER -->
+    <footer class="foot" data-label="09 / end">
       <div class="marquee" aria-hidden="true"><div class="marquee__inner" id="marquee"><span>FINALARC</span><i>✦</i><span class="outline">FINALARC</span><i>✦</i><span>FINALARC</span><i>✦</i><span class="outline">FINALARC</span><i>✦</i></div></div>
       <div class="foot__row wrap mono">
         <span>© <span id="year">2026</span> finalarc</span>

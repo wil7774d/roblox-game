@@ -7,8 +7,22 @@
 
 const CONFIG = {
   robloxId: 461323235,
-  discordId: "1453897439043125350",
-  discordName: "finalarcuser",
+  discord: [
+    { id: "1453897439043125350", name: "finalarcuser", label: "main" },
+    { id: "1240134707153473577", name: "tjinooo", label: "alt" },
+  ],
+  // the original game — taken down by Roblox, so these are kept by hand
+  game: { peakCCU: 497, visits: 500000 },
+  // a few of the avatar assets; price in Robux
+  items: [
+    { name: "Stormbreaker Horns", price: 30000, tag: "offsale", art: "horns", hue: 198 },
+    { name: "Headless Horseman", price: 31000, tag: "bundle", art: "headless", hue: 26 },
+    { name: "Opal King of Knight", price: 50000, tag: "rare", art: "helm", hue: 165 },
+    { name: "Violet Valkyrie", price: 50000, tag: "hat", art: "valk", hue: 272 },
+    { name: "8-Bit Crown", price: 30000, tag: "hat", art: "crown", hue: 46 },
+    { name: "Pactbreaker Bundle", price: 30000, tag: "bundle", art: "pact", hue: 352 },
+    { name: "Korblox Deathspeaker", price: 17000, tag: "bundle", art: "korblox", hue: 222 },
+  ],
   badgePages: 5,          // up to 100 badges per page
   recentBadges: 12,
   cacheMinutes: 10,
@@ -57,7 +71,7 @@ async function rbx(sub, path) {
 }
 
 const cache = {
-  key: `fa-cache-${CONFIG.robloxId}`,
+  key: `fa-cache-v2-${CONFIG.robloxId}`,
   get() {
     try {
       const raw = JSON.parse(localStorage.getItem(this.key));
@@ -78,7 +92,7 @@ async function fetchRoblox() {
   const id = CONFIG.robloxId;
   const safe = (p) => p.catch(() => null);
 
-  const [user, friends, followers, following, headshot, avatar, groups, games, names] = await Promise.all([
+  const [user, friends, followers, following, headshot, avatar, groups, games, names, wearing] = await Promise.all([
     safe(rbx("users", `/v1/users/${id}`)),
     safe(rbx("friends", `/v1/users/${id}/friends/count`)),
     safe(rbx("friends", `/v1/users/${id}/followers/count`)),
@@ -88,6 +102,7 @@ async function fetchRoblox() {
     safe(rbx("groups", `/v2/users/${id}/groups/roles`)),
     safe(rbx("games", `/v2/users/${id}/games?accessFilter=Public&limit=50&sortOrder=Desc`)),
     safe(rbx("users", `/v1/users/${id}/username-history?limit=100&sortOrder=Asc`)),
+    safe(rbx("avatar", `/v1/users/${id}/currently-wearing`)),
   ]);
 
   // badges — paginate
@@ -104,9 +119,11 @@ async function fetchRoblox() {
   // icons for recent badges + groups
   const recent = badges.slice(0, CONFIG.recentBadges);
   const groupList = groups?.data || [];
-  const [badgeIcons, groupIcons] = await Promise.all([
+  const wearIds = (wearing?.assetIds || []).slice(0, 30);
+  const [badgeIcons, groupIcons, wearIcons] = await Promise.all([
     recent.length ? safe(rbx("thumbnails", `/v1/badges/icons?badgeIds=${recent.map((b) => b.id).join(",")}&size=150x150&format=Png&isCircular=false`)) : null,
     groupList.length ? safe(rbx("thumbnails", `/v1/groups/icons?groupIds=${groupList.map((g) => g.group.id).join(",")}&size=150x150&format=Png&isCircular=false`)) : null,
+    wearIds.length ? safe(rbx("thumbnails", `/v1/assets?assetIds=${wearIds.join(",")}&returnPolicy=PlaceHolder&size=150x150&format=Png&isCircular=false`)) : null,
   ]);
   const iconMap = (res) => Object.fromEntries((res?.data || []).map((t) => [t.targetId, t.imageUrl]));
   const bIcons = iconMap(badgeIcons), gIcons = iconMap(groupIcons);
@@ -126,6 +143,7 @@ async function fetchRoblox() {
       .sort((a, b) => b.rank - a.rank),
     games: (games?.data || []).map((g) => ({ name: g.name, visits: g.placeVisits || 0 })),
     names: (names?.data || []).map((n) => n.name),
+    wearing: (wearIcons?.data || []).filter((t) => t.imageUrl).map((t) => ({ id: t.targetId, icon: t.imageUrl })),
   };
   if (data.user) cache.set(data);
   return data;
@@ -187,6 +205,8 @@ function renderRoblox(d) {
   setText("sGames", d.games.length ? `across ${d.games.length} public experience${d.games.length > 1 ? "s" : ""}` : "no public experiences");
   setText("sNamesF", d.names.length ? `first known as ${d.names[0]}` : "same name since day one");
 
+  renderWearing(d.wearing || []);
+  if (d.games.length && visits) setText("reVisits", `the reupload so far → ${fmt(visits)} visits and counting.`);
   renderBadges(d.recentBadges);
   renderGroups(d.groups);
   renderInsights(d, { created, days, years, visits });
@@ -212,6 +232,46 @@ function renderBadges(list) {
   bindTilt($$(".badge", el));
 }
 
+function renderWearing(list) {
+  if (!list.length) return;
+  $("#wearing").innerHTML = list.map((a) => `<a href="https://www.roblox.com/catalog/${a.id}" target="_blank" rel="noopener" data-cursor="view"><img src="${esc(a.icon)}" alt="" loading="lazy"></a>`).join("");
+  $("#wearingWrap").hidden = false;
+  bindCursor($$("[data-cursor]", $("#wearing")));
+  layout();
+}
+
+/* --------------------------------------------------------------------------
+   Closet
+   -------------------------------------------------------------------------- */
+const ART = {
+  horns: `<path d="M30 72C10 56 11 26 27 11c-2 19 4 36 16 46"/><path d="M70 72c20-16 19-46 3-61 2 19-4 36-16 46"/><path d="M53 36 44 54h10l-8 20" stroke-width="3.5"/>`,
+  headless: `<circle cx="50" cy="34" r="17" stroke-dasharray="3 6"/><ellipse cx="50" cy="62" rx="22" ry="7"/><path d="M28 62v10c0 9 44 9 44 0V62"/><path d="M44 58c2-6 10-6 12 0" opacity=".6"/>`,
+  helm: `<path d="M28 82V46c0-22 44-22 44 0v36z"/><path d="M28 54h44M50 54v28M36 62h8M56 62h8"/><path d="M50 25c2-12 14-17 24-15-6 3-10 8-12 14"/>`,
+  valk: `<path d="M37 76V50c0-16 26-16 26 0v26"/><path d="M37 52C22 46 13 31 11 17c10 8 19 12 27 23"/><path d="M63 52c15-6 24-21 26-35-10 8-19 12-27 23"/><path d="M43 58h14M50 58v14"/>`,
+  crown: `<path d="M18 72V34h8v8h8v8h8V28h16v22h8v-8h8v-8h8v38z"/><path d="M18 80h64"/><rect x="46" y="56" width="8" height="8" fill="currentColor"/><rect x="28" y="60" width="6" height="6" fill="currentColor" opacity=".7"/><rect x="66" y="60" width="6" height="6" fill="currentColor" opacity=".7"/>`,
+  pact: `<rect x="10" y="40" width="34" height="20" rx="10"/><rect x="56" y="40" width="34" height="20" rx="10"/><path d="M50 30l4 8-6 6 7 8-5 8 3 8" stroke-width="2.5"/><path d="M30 24 50 12l20 12M30 76l20 12 20-12" opacity=".5"/>`,
+  korblox: `<path d="M41 10h18l-3 30 4 30 9 16H43l3-16-4-30z"/><circle cx="50" cy="40" r="5"/><circle cx="52" cy="70" r="5"/><path d="M47 22h6M47 52h6" opacity=".6"/>`,
+};
+
+function renderCloset() {
+  const items = CONFIG.items;
+  const total = items.reduce((a, i) => a + i.price, 0);
+  $("#closetTotal").dataset.to = total;
+  setText("closetUsd", `≈ $${fmt(total * 0.01)}+ in real money`);
+  $("#items").innerHTML = items.map((it, i) => `
+    <article class="item card" style="--hue:${it.hue};--i:${i % 4}" data-tilt>
+      <div class="item__glow"></div>
+      <div class="item__holo"></div>
+      <div class="item__top mono"><span>${String(i + 1).padStart(2, "0")}</span><span class="item__tag${it.tag === "offsale" ? " item__tag--off" : ""}">${esc(it.tag)}</span></div>
+      <div class="item__art"><svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ART[it.art] || ""}</svg></div>
+      <div class="item__name">${esc(it.name)}</div>
+      <div class="item__price"><i>R$</i>${fmt(it.price)}</div>
+    </article>`).join("");
+  observeReveal($$(".item"));
+  const closetIO = new IntersectionObserver(([e]) => { if (e.isIntersecting) { countUp($("#closetTotal")); closetIO.disconnect(); } }, { threshold: .4 });
+  closetIO.observe($(".closet__total"));
+}
+
 function renderGroups(list) {
   const el = $("#groups");
   if (!list.length) { el.innerHTML = `<li class="empty mono">no public groups.</li>`; return; }
@@ -235,6 +295,10 @@ function renderInsights(d, { created, days, years, visits }) {
     const my = created.toLocaleDateString("en-US", { month: "long", year: "numeric" });
     out.push(`Joined Roblox on a <b>${wd}</b> in <b>${my}</b> — that's <b>${fmt(days)} days</b>, or <em>${years.toFixed(1)} years</em> on the platform.`);
   }
+  out.push(`The original game peaked at <b>${fmt(CONFIG.game.peakCCU)}</b> concurrent players and <b>${compact(CONFIG.game.visits)}</b> visits — until one sign got it <em>taken down.</em>`);
+  const worth = CONFIG.items.reduce((a, i) => a + i.price, 0);
+  const top = [...CONFIG.items].sort((a, b) => b.price - a.price)[0];
+  out.push(`Wearing <b>R$ ${compact(worth)}+</b> across just ${CONFIG.items.length} listed pieces — the priciest, <em>${esc(top.name)}</em>, runs <b>R$ ${compact(top.price)}</b>.`);
   if (d.badgeCount && years) {
     const every = Math.max(1, Math.round(days / d.badgeCount));
     out.push(`${d.badgesCapped ? "At least" : "Exactly"} <b>${fmt(d.badgeCount)} badges</b> collected — one roughly every <b>${every} day${every > 1 ? "s" : ""}</b>.`);
@@ -255,7 +319,7 @@ function renderInsights(d, { created, days, years, visits }) {
   if (d.names.length) out.push(`Has gone by <b>${d.names.length}</b> other name${d.names.length > 1 ? "s" : ""} — originally <em>${esc(d.names[0])}</em>.`);
   if (!out.length) out.push(`Live insights are offline right now — <em>check back in a moment.</em>`);
 
-  const roman = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii"];
+  const roman = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"];
   $("#insightsList").innerHTML = out.map((t, i) => `<li class="insight" data-reveal><span class="insight__n mono">${roman[i]}</span><p>${t}</p></li>`).join("");
   observeReveal($$("#insightsList .insight"));
 }
@@ -265,43 +329,75 @@ function renderInsights(d, { created, days, years, visits }) {
    -------------------------------------------------------------------------- */
 const STATUS_TXT = { online: "online", idle: "idle", dnd: "do not disturb", offline: "offline" };
 
-async function loadDiscord() {
+function renderDiscordCards() {
+  $("#dcDuo").innerHTML = CONFIG.discord.map((acc, i) => `
+    <article class="card dc${i ? " dc--alt" : ""}" data-dc="${acc.id}" data-tilt>
+      <div class="dc__banner"><div class="dc__banner-art"></div><span class="dc__tag mono">${esc(acc.label)}</span></div>
+      <div class="dc__body">
+        <div class="dc__avatar">
+          <img class="dc-av" alt="" decoding="async">
+          <span class="dc__initial dc-initial">${esc(acc.name[0].toUpperCase())}</span>
+          <span class="status-dot status-dot--lg dc-status"></span>
+        </div>
+        <div class="dc__who">
+          <div class="dc__name dc-name">${esc(acc.name)}</div>
+          <div class="dc__user mono dc-user">${esc(acc.name)}</div>
+        </div>
+        <div class="dc__custom dc-custom"></div>
+        <div class="dc__activity dc-activity">
+          <div class="dc__label mono">status</div>
+          <div class="dc__act-empty">checking presence…</div>
+        </div>
+        <div class="dc__actions">
+          <button class="btn btn--solid" type="button" data-copy="${esc(acc.name)}" data-cursor="copy" data-magnetic><span class="btn__txt">copy username</span></button>
+          <a class="btn" href="https://discord.com/users/${acc.id}" target="_blank" rel="noopener" data-cursor="open" data-magnetic>open profile ↗</a>
+        </div>
+        <div class="dc__id mono">id · ${acc.id}</div>
+      </div>
+    </article>`).join("");
+}
+
+async function loadDiscordAccount(acc, card, isMain) {
+  const q = (c) => $(c, card);
   let p;
   try {
-    const res = await getJSON(`https://api.lanyard.rest/v1/users/${CONFIG.discordId}`, 8000);
+    const res = await getJSON(`https://api.lanyard.rest/v1/users/${acc.id}`, 8000);
     if (!res.success) throw 0;
     p = res.data;
   } catch {
-    setStatus(null);
-    setText("dcState", "live presence unavailable — add me with the button below.");
+    if (isMain) setStatus(null);
+    if (!card.dataset.live) q(".dc-activity").innerHTML = `<div class="dc__label mono">status</div><div class="dc__act-empty">presence is warming up — add me in the meantime.</div>`;
     return;
   }
+  card.dataset.live = "1";
 
   const u = p.discord_user || {};
-  setStatus(p.discord_status);
-  setText("dcName", u.global_name || u.display_name || u.username || CONFIG.discordName);
-  setText("dcUser", u.username || CONFIG.discordName);
-  setText("dcInitial", (u.global_name || u.username || "f")[0].toUpperCase());
+  if (isMain) setStatus(p.discord_status);
+  q(".dc-status").dataset.s = p.discord_status || "offline";
+  q(".dc-name").textContent = u.global_name || u.display_name || u.username || acc.name;
+  q(".dc-user").textContent = u.username || acc.name;
+  q(".dc-initial").textContent = (u.global_name || u.username || acc.name)[0].toUpperCase();
   if (u.avatar) {
     const ext = u.avatar.startsWith("a_") ? "gif" : "png";
-    loadImg($("#dcAvatar"), `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.${ext}?size=256`);
+    const src = `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.${ext}?size=256`;
+    if (q(".dc-av").getAttribute("src") !== src) loadImg(q(".dc-av"), src);
   }
 
   const acts = p.activities || [];
   const custom = acts.find((a) => a.type === 4);
-  $("#dcCustom").textContent = custom ? [custom.emoji?.name, custom.state].filter(Boolean).join(" ") : "";
+  q(".dc-custom").textContent = custom ? [custom.emoji?.name, custom.state].filter(Boolean).join(" ") : "";
 
-  const box = $("#dcActivity");
+  const box = q(".dc-activity");
   if (p.listening_to_spotify && p.spotify) {
-    const s = p.spotify;
+    const sp = p.spotify;
     box.innerHTML = `<div class="dc__label mono">listening to spotify</div>
-      <div class="dc__act"><img src="${esc(s.album_art_url)}" alt="">
-        <div style="min-width:0"><div class="dc__act-title">${esc(s.song)}</div><div class="dc__act-sub">by ${esc(s.artist)}</div>
-        <div class="dc__prog"><span id="spProg"></span></div></div></div>`;
-    spotifyTimes = s.timestamps;
+      <div class="dc__act"><img src="${esc(sp.album_art_url)}" alt="">
+        <div style="min-width:0"><div class="dc__act-title">${esc(sp.song)}</div><div class="dc__act-sub">by ${esc(sp.artist)}</div>
+        <div class="dc__prog"><span class="sp-prog"></span></div></div></div>`;
+    spotify.set(card, sp.timestamps);
     return;
   }
-  spotifyTimes = null;
+  spotify.delete(card);
   const game = acts.find((a) => a.type === 0 || a.type === 1 || a.type === 3);
   if (game) {
     let img = "";
@@ -316,16 +412,24 @@ async function loadDiscord() {
   box.innerHTML = `<div class="dc__label mono">status</div><div class="dc__act-empty">${p.discord_status === "offline" ? "offline right now — drop a request anyway." : `${STATUS_TXT[p.discord_status]} and not doing much. say hi.`}</div>`;
 }
 
-let spotifyTimes = null;
+function loadDiscord() {
+  CONFIG.discord.forEach((acc, i) => {
+    const card = $(`[data-dc="${acc.id}"]`);
+    if (card) loadDiscordAccount(acc, card, i === 0);
+  });
+}
+
+const spotify = new Map();
 function tickSpotify() {
-  const el = $("#spProg");
-  if (!el || !spotifyTimes) return;
-  const { start, end } = spotifyTimes;
-  el.style.transform = `scaleX(${clamp((Date.now() - start) / (end - start))})`;
+  for (const [card, { start, end }] of spotify) {
+    const el = $(".sp-prog", card);
+    if (el) el.style.transform = `scaleX(${clamp((Date.now() - start) / (end - start))})`;
+  }
 }
 
 function setStatus(s) {
-  for (const id of ["heroStatus", "dcStatus"]) { const el = document.getElementById(id); if (el) el.dataset.s = s || "offline"; }
+  const el = document.getElementById("heroStatus");
+  if (el) el.dataset.s = s || "offline";
   setText("heroStatusTxt", s ? STATUS_TXT[s] : "unknown");
 }
 
@@ -340,7 +444,7 @@ const GL = (() => {
   const vs = `attribute vec2 p; void main(){ gl_Position = vec4(p,0.,1.); }`;
   const fs = `
   precision highp float;
-  uniform vec2 uRes; uniform float uTime; uniform vec2 uMouse; uniform float uScroll; uniform float uIntro; uniform float uVel;
+  uniform vec2 uRes; uniform float uTime; uniform vec2 uMouse; uniform float uScroll; uniform float uIntro; uniform float uVel; uniform float uBlood;
 
   float hash(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
   float noise(vec2 p){
@@ -375,6 +479,11 @@ const GL = (() => {
     a1 = mix(a1, amber, smoothstep(.65, .95, s));
     vec3 a2 = mix(violet, ember, smoothstep(.3, .8, s));
 
+    // the takedown — everything bleeds
+    a1 = mix(a1, vec3(.8, .03, .06), uBlood);
+    a2 = mix(a2, vec3(.38, .0, .03), uBlood);
+    deep = mix(deep, vec3(.2, .0, .025), uBlood);
+
     vec3 col = vec3(.022, .022, .03);
     col += deep * smoothstep(.2, .9, f) * 1.4;
     col += a2 * pow(clamp(length(r), 0., 1.), 3.) * .22;
@@ -386,9 +495,14 @@ const GL = (() => {
     vec2 c = vec2(0., -1.05 + .35 * sin(s * 6.2832));
     float rad = mix(.55, 1.0, uIntro) + .08 * sin(uTime*.25);
     vec2 d = au - c + (q - .5) * .12;
+    d.x += uBlood * (noise(vec2(d.y * 34., uTime * 7.)) - .5) * .06;
     float ring = abs(length(d) - rad);
     float ang = atan(d.x, d.y);
     float span = smoothstep(1.9, .2, abs(ang)) * uIntro;
+    // cracked arc: gaps + flicker while bleeding
+    span *= 1. - uBlood * smoothstep(.1, .02, abs(ang - .35));
+    span *= 1. - uBlood * smoothstep(.07, .01, abs(ang + .62));
+    span *= 1. - uBlood * .6 * step(.9, hash(vec2(floor(uTime * 14.), 7.)));
     float core = .0025 / (ring + .002);
     float glow = .03 / (ring + .03);
     col += a1 * (core * .9 + glow * .45) * span;
@@ -402,7 +516,8 @@ const GL = (() => {
     col += a1 * smoothstep(.97, 1., noise(vec2(uv.y * 80., t*2.))) * clamp(abs(uVel), 0., 1.) * .25;
 
     // vignette + dither
-    col *= 1. - .55 * dot(uv*.75, uv*.75);
+    col = mix(col, vec3(dot(col, vec3(.3, .59, .11))) * vec3(1.45, .3, .32), uBlood * .55);
+    col *= 1. - .55 * dot(uv*.75, uv*.75) - uBlood * .2 * dot(uv, uv);
     col += (hash(gl_FragCoord.xy + uTime) - .5) / 255.;
     gl_FragColor = vec4(col, 1.);
   }`;
@@ -428,7 +543,7 @@ const GL = (() => {
   gl.enableVertexAttribArray(loc);
   gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   const U = {};
-  for (const n of ["uRes", "uTime", "uMouse", "uScroll", "uIntro", "uVel"]) U[n] = gl.getUniformLocation(prog, n);
+  for (const n of ["uRes", "uTime", "uMouse", "uScroll", "uIntro", "uVel", "uBlood"]) U[n] = gl.getUniformLocation(prog, n);
 
   function resize() {
     const dpr = Math.min(devicePixelRatio || 1, 1.5) * (innerWidth < 760 ? .7 : .85);
@@ -440,13 +555,14 @@ const GL = (() => {
   addEventListener("resize", resize);
 
   return {
-    draw({ time, mx, my, scroll, intro, vel }) {
+    draw({ time, mx, my, scroll, intro, vel, blood }) {
       gl.uniform2f(U.uRes, canvas.width, canvas.height);
       gl.uniform1f(U.uTime, time);
       gl.uniform2f(U.uMouse, mx, my);
       gl.uniform1f(U.uScroll, scroll);
       gl.uniform1f(U.uIntro, intro);
       gl.uniform1f(U.uVel, vel);
+      gl.uniform1f(U.uBlood, blood);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     },
   };
@@ -465,12 +581,42 @@ function split(el) {
     el.innerHTML = text.split(/\s+/).filter(Boolean).map((w, i) => `<span class="w" aria-hidden="true"><span style="--i:${i}">${esc(w)}</span></span>`).join(" ");
   }
 }
+renderDiscordCards();
 $$("[data-split]").forEach(split);
 
 const io = new IntersectionObserver((entries) => {
   for (const e of entries) if (e.isIntersecting) { e.target.classList.add("is-in"); io.unobserve(e.target); }
 }, { rootMargin: "0px 0px -12% 0px", threshold: 0.01 });
 function observeReveal(els) { els.forEach((el) => io.observe(el)); }
+renderCloset();
+
+// text scramble — eyebrows decode themselves when they appear
+const GLYPHS = "!<>-_\\/[]{}—=+*^?#01ァカサタナ";
+function scramble(el) {
+  const text = el.dataset.txt || (el.dataset.txt = el.textContent);
+  if (reduced) return;
+  let f = 0;
+  const total = 18 + text.length;
+  clearInterval(el._scr);
+  el._scr = setInterval(() => {
+    f++;
+    const reveal = (f / total) * text.length * 1.4;
+    el.textContent = [...text].map((ch, i) => (ch === " " || i < reveal - 4 ? ch : i < reveal ? GLYPHS[(Math.random() * GLYPHS.length) | 0] : "\u00a0")).join("");
+    if (f >= total) { el.textContent = text; clearInterval(el._scr); }
+  }, 32);
+}
+$$(".eyebrow, .manifesto__eyebrow").forEach((eb) => {
+  const node = [...eb.childNodes].reverse().find((n) => n.nodeType === 3 && n.textContent.trim());
+  if (!node) return;
+  const span = document.createElement("span");
+  span.className = "scr";
+  span.textContent = node.textContent.trim();
+  eb.replaceChild(span, node);
+  eb.insertBefore(document.createTextNode(" "), span);
+});
+const scrIO = new IntersectionObserver((entries) => {
+  for (const e of entries) if (e.isIntersecting && !e.target.closest(".saga__chap")) { scramble(e.target); scrIO.unobserve(e.target); }
+}, { threshold: 1 });
 
 // manifesto: word-by-word scrub
 const manifesto = $("#manifesto");
@@ -496,8 +642,13 @@ addEventListener("pointerup", () => cursorEl.classList.remove("is-down"));
 
 function bindCursor(els) {
   els.forEach((el) => {
-    el.addEventListener("pointerenter", () => { labelEl.textContent = el.dataset.cursor; cursorEl.classList.add("is-active"); });
-    el.addEventListener("pointerleave", () => cursorEl.classList.remove("is-active"));
+    const quiet = el.matches(".btn, [data-magnetic]");
+    el.addEventListener("pointerenter", () => {
+      if (quiet) return cursorEl.classList.add("is-hidden");
+      labelEl.textContent = el.dataset.cursor;
+      cursorEl.classList.add("is-active");
+    });
+    el.addEventListener("pointerleave", () => cursorEl.classList.remove("is-active", "is-hidden"));
   });
 }
 bindCursor($$("[data-cursor]"));
@@ -543,6 +694,59 @@ const scenes = {
   manifesto: $('[data-scene="manifesto"]'),
   stats: $('[data-scene="stats"]'),
   avatar: $('[data-scene="avatar"]'),
+  saga: $('[data-scene="saga"]'),
+};
+
+/* --- saga: blood splatter + drips, generated once --- */
+function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function splatSVG(seed) {
+  const R = rng(seed), n = 34, pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    let r = 26 + R() * 7;
+    if (R() < .3) r += 8 + R() * 18;            // tendrils
+    pts.push([50 + Math.cos(a) * r, 50 + Math.sin(a) * r]);
+  }
+  // closed catmull-rom → bezier
+  let d = `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += `C${c1[0].toFixed(1)} ${c1[1].toFixed(1)} ${c2[0].toFixed(1)} ${c2[1].toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
+  }
+  let drops = "";
+  for (let i = 0; i < 26; i++) {
+    const a = R() * Math.PI * 2, dist = 40 + R() * 30, r = .6 + R() * 3.6;
+    const x = 50 + Math.cos(a) * dist, y = 50 + Math.sin(a) * dist;
+    if (R() < .35) drops += `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${(r * 2.6).toFixed(1)}" ry="${(r * .8).toFixed(1)}" transform="rotate(${(a * 180 / Math.PI).toFixed(0)} ${x.toFixed(1)} ${y.toFixed(1)})"/>`;
+    else drops += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}"/>`;
+  }
+  return `<svg viewBox="0 0 100 100"><defs><radialGradient id="sg${seed}" cx="45%" cy="40%" r="60%"><stop offset="0" stop-color="#c3141d"/><stop offset=".6" stop-color="#7d0710"/><stop offset="1" stop-color="#3d0207"/></radialGradient></defs><g fill="url(#sg${seed})"><path d="${d}"/>${drops}</g><path d="${d}" fill="none" stroke="rgba(255,120,120,.18)" stroke-width=".6" transform="translate(-.8 -.8)"/></svg>`;
+}
+const SPLATS = [
+  { x: -6, y: 8, s: 34, r: 20, d: 0, o: .85 }, { x: 70, y: -8, s: 30, r: -40, d: .08, o: .8 },
+  { x: 78, y: 56, s: 26, r: 110, d: .16, o: .75 }, { x: 4, y: 62, s: 22, r: 200, d: .22, o: .7 },
+  { x: 40, y: 74, s: 16, r: 60, d: .3, o: .6 }, { x: 52, y: 10, s: 12, r: 10, d: .36, o: .55 },
+];
+$("#splats").innerHTML = SPLATS.map((p, i) => `<div class="splat" style="left:${p.x}%;top:${p.y}%;width:${p.s}vw;height:${p.s}vw;--r:${p.r}deg;--d:${p.d}s;--o:${p.o}">${splatSVG(i * 97 + 13)}</div>`).join("");
+const drips = (() => {
+  const R = rng(4242), out = [];
+  for (let i = 0; i < 26; i++) {
+    const el = document.createElement("div");
+    el.className = "drip";
+    el.style.left = `${(i / 26) * 100 + R() * 3}%`;
+    el.style.setProperty("--w", `${4 + R() * 11}px`);
+    $("#drips").append(el);
+    out.push({ el, max: 6 + Math.pow(R(), 1.6) * 46, delay: R() * .55 });
+  }
+  return out;
+})();
+const saga = {
+  root: scenes.saga, sticky: $(".saga .sticky"),
+  chaps: $$(".saga__chap"), hud: $$(".saga__hud span"),
+  rise: $(".saga__line--rise"), fall: $(".saga__line--fall"), re: $(".saga__line--re"),
+  area: $(".saga__area"), peak: $(".saga__peak"), dripsBox: $("#drips"),
+  active: -1, prog: 0, fallen: false,
 };
 const track = $("#statsTrack");
 const statCards = $$(".stat", track);
@@ -571,7 +775,7 @@ function countUp(el) {
   if (el.dataset.done || el.dataset.to === undefined || el.dataset.to === "") return;
   el.dataset.done = "1";
   const to = +el.dataset.to, start = performance.now(), dur = reduced ? 1 : 1800;
-  const big = el.id === "sVisits" && to >= 1e5;
+  const big = (el.id === "sVisits" || el.id === "sLifetime" || el.hasAttribute("data-compact")) && to >= 1e5;
   const step = (now) => {
     const k = ease(clamp((now - start) / dur));
     el.textContent = big ? compact(to * k) : fmt(to * k);
@@ -580,7 +784,57 @@ function countUp(el) {
   requestAnimationFrame(step);
 }
 
-const state = { sy: scrollY, vel: 0, intro: 0, introTarget: 0, entered: false, mProg: 0, statsProg: 0, avProg: 0, marq: 0 };
+const state = { sy: scrollY, vel: 0, intro: 0, introTarget: 0, entered: false, mProg: 0, statsProg: 0, avProg: 0, marq: 0, blood: 0 };
+const N_STATS = statCards.length;
+setText("statsTotal", String(N_STATS).padStart(2, "0"));
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+
+function updateSaga() {
+  const el = saga.root, h = el.offsetHeight - innerHeight;
+  const raw = (scrollY - el.offsetTop) / h;
+  saga.prog = lerp(saga.prog, clamp(raw), reduced ? 1 : .14);
+  const p = saga.prog;
+  const inView = raw > -1 && raw < 1 + innerHeight / h;
+
+  // chapters
+  const ch = Math.min(3, Math.floor(clamp(raw) * 4));
+  if (ch !== saga.active && inView) {
+    saga.active = ch;
+    saga.chaps.forEach((c, i) => c.classList.toggle("is-active", i === ch));
+    const eb = $(".scr", saga.chaps[ch]);
+    if (eb) scramble(eb);
+    $$("[data-num]", saga.chaps[ch]).forEach(countUp);
+  }
+  saga.hud.forEach((s, i) => { s.classList.toggle("on", i === ch); s.style.setProperty("--f", clamp((p - i * .25) / .25)); });
+
+  // chart
+  saga.rise.style.strokeDashoffset = 1 - clamp(p / .2);
+  saga.area.style.opacity = clamp((p - .08) / .14) * (1 - smooth(.5, .56, p));
+  saga.peak.style.opacity = clamp((p - .16) / .05) * (1 - smooth(.5, .54, p) * .7);
+  saga.fall.style.strokeDashoffset = 1 - clamp((p - .5) / .05);
+  saga.re.style.strokeDashoffset = 1 - clamp((p - .77) / .18);
+
+  // the fall: shake, splatter, drips
+  const fallen = p > .5;
+  if (fallen !== saga.fallen) {
+    saga.fallen = fallen;
+    el.classList.toggle("is-fallen", fallen);
+    if (fallen && !reduced) { saga.sticky.classList.remove("shake"); void saga.sticky.offsetWidth; saga.sticky.classList.add("shake"); }
+  }
+  el.classList.toggle("is-splat", p > .52);
+  const after = 1 - .65 * smooth(.76, .92, p);
+  $("#splats").style.opacity = after;
+  saga.dripsBox.style.opacity = after;
+  const k = clamp((p - .5) / .26);
+  saga.dripsBox.style.setProperty("--drip-top", clamp(k * 3));
+  for (const d of drips) d.el.style.height = `${ease(clamp((k - d.delay) / (1 - d.delay))) * d.max}vh`;
+
+  // blood amount, fading out after the scene
+  let b = smooth(.47, .56, p) * (1 - .62 * smooth(.76, .92, p));
+  b *= 1 - clamp((scrollY - (el.offsetTop + h)) / (innerHeight * .7));
+  if (raw < 0) b = 0;
+  return b;
+}
 
 function frame(now) {
   const t = now / 1000;
@@ -623,7 +877,7 @@ function frame(now) {
   state.statsProg = lerp(state.statsProg, sp, reduced ? 1 : .1);
   track.style.transform = `translate3d(${-state.statsProg * trackDist}px, 0, 0)`;
   $("#statsBar").style.transform = `scaleX(${state.statsProg})`;
-  const idx = Math.min(8, Math.max(1, Math.ceil(state.statsProg * 8.2)));
+  const idx = Math.min(N_STATS, Math.max(1, Math.ceil(state.statsProg * (N_STATS + .2))));
   $("#statsIdx").textContent = String(idx).padStart(2, "0");
   if (scrollY > scenes.stats.offsetTop - innerHeight) {
     for (const c of statCards) {
@@ -661,7 +915,13 @@ function frame(now) {
 
   tickSpotify();
 
-  if (GL) GL.draw({ time: t, mx: pointer.nx, my: pointer.ny, scroll: pageP, intro: ease(clamp(state.intro)), vel: state.vel });
+  // saga + blood theme
+  const blood = updateSaga();
+  state.blood = lerp(state.blood, blood, reduced ? 1 : .08);
+  document.documentElement.style.setProperty("--blood", state.blood.toFixed(3));
+  document.documentElement.classList.toggle("blood", state.blood > .4);
+
+  if (GL) GL.draw({ time: t, mx: pointer.nx, my: pointer.ny, scroll: pageP, intro: ease(clamp(state.intro)), vel: state.vel, blood: state.blood });
 
   requestAnimationFrame(frame);
 }
@@ -745,6 +1005,7 @@ function enter() {
   setTimeout(() => {
     $$(".hero [data-split], .hero [data-reveal]").forEach((el) => el.classList.add("is-in"));
     observeReveal($$("[data-split]:not(.hero [data-split]), [data-reveal]:not(.hero [data-reveal])"));
+    $$(".scr").forEach((e) => scrIO.observe(e));
   }, 250);
   setTimeout(() => { gate.classList.add("is-gone"); $$("[data-tilt]").forEach((el) => el.classList.add("tilt-live")); layout(); }, 2200);
 }

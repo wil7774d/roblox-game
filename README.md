@@ -19,8 +19,8 @@ Go to repo **Settings → Pages**, set **Source: Deploy from a branch**, then pi
 | Source | How |
 | --- | --- |
 | Roblox (profile, avatar, friends, followers, badges, groups, games, past names) | Public Roblox APIs through the `roproxy.com` CORS mirror. If that fails, it falls back to `corsproxy.io` and then `allorigins`. Results are cached in the browser for 10 min. |
-| Discord (status, avatar, custom status, game, Spotify) | [Lanyard](https://github.com/Phineas/lanyard). **To turn on live presence, join the Lanyard Discord server: https://discord.gg/lanyard.** Until you do, the card shows a static fallback. |
+| Discord: main + alt (status, avatar, custom status, game, Spotify) | [Lanyard](https://github.com/Phineas/lanyard). Both accounts need to be in the Lanyard Discord server (https://discord.gg/lanyard). Until they are, the cards show a static fallback. |
 
 ## Customize
 
-Change IDs and limits in the `CONFIG` block at the top of `main.js`. Change the colors in the `:root` tokens in `styles.css`.
+Change IDs, Discord accounts, the original game's numbers and the closet items/prices in the `CONFIG` block at the top of `main.js`. Change the colors in the `:root` tokens in `styles.css`.
