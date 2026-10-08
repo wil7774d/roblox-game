@@ -652,7 +652,7 @@ html.blood {
    ========================================================================== */
 
 /* ---------- things that ride the track ---------- */
-.grain { opacity: calc(.085 + var(--hat, 0) * .06 + var(--tension, 0) * .08); }
+.grain { opacity: calc(.085 + var(--hat, 0) * .06 + var(--tension, 0) * .08); will-change: opacity; }
 .nav__logo svg { scale: calc(1 + var(--kick, 0) * .22); transition: color .4s; }
 .bloodwash { opacity: calc(var(--blood, 0) * (.82 + var(--kick, 0) * .35)); }
 .saga.is-splat .splat svg { scale: calc(1 + var(--kick, 0) * .045); }

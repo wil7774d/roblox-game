@@ -47,6 +47,7 @@
       el.addEventListener("seeked", () => clock.sync());
       el.addEventListener("ended", () => { this.playing = false; this.ended = true; onEnded(); });
       el.addEventListener("error", () => { this.failed = true; this.ready = true; });
+      el.addEventListener("loadstart", () => { this.waiting = false; });
       this.preload();
     },
     // the whole track is downloaded before the gate opens (with real progress), then played from
@@ -71,8 +72,8 @@
           src = URL.createObjectURL(new Blob(chunks, { type: "audio/mpeg" }));
         } catch (e) { console.warn("track preload", e); }
       }
+      if (this.streaming) { if (src !== SONG.src) URL.revokeObjectURL(src); L?.done("track", "streaming"); return; }
       el.src = src;
-      el.load();
       await new Promise((res) => { if (this.ready) return res(); el.addEventListener("canplaythrough", res, { once: true }); el.addEventListener("error", res, { once: true }); setTimeout(res, 9000); });
       L?.done("track", this.failed ? "unavailable" : "");
     },
@@ -99,7 +100,15 @@
         this.live = false;
       }
     },
+    // the visitor got in before the download finished (slow connection, the gate's 30 s escape):
+    // stream it rather than leave the show waiting on a silent element
+    ensureSrc() {
+      if (this.el.getAttribute("src")) return;
+      this.streaming = true;
+      this.el.src = SONG.src;
+    },
     play() {
+      this.ensureSrc();
       this.wire();
       this.ctx?.resume?.();
       if (this.ended) { this.el.currentTime = 0; this.ended = false; }
@@ -349,7 +358,7 @@
      deliberate clicks and stops everything. */
   const pilot = {
     on: !reduced, entered: false, armed: 0, from: null, at: 0, run: -1, lastHint: 0,
-    get driving() { return this.on && this.entered && !track.ended && !track.failed; },
+    get driving() { return this.on && this.entered && !track.ended && !track.failed && !!track.el.getAttribute("src"); },
   };
 
   function glideFromHere() { pilot.from = V.y; pilot.at = performance.now(); }
@@ -630,6 +639,7 @@
     cam.s = zoom > .0005 ? 1 + zoom : 1;
 
     // letterbox + captions
+    if (fx.rewind && (!track.playing || F.t < T(111) || F.t >= T(112))) fx.rewindEnd();
     let lb = F.tension * (pilot.driving ? 11 : 5);
     if (fx.rewind) lb = Math.max(lb, 6);
     fxEls.fx.style.setProperty("--lb", `${lb.toFixed(2)}vh`);
@@ -722,7 +732,7 @@
     np?.setAttribute("aria-label", playing ? "Pause the track" : "Play the track");
     root.classList.toggle("is-playing", playing);
   }
-  ["playing", "pause", "ended", "waiting"].forEach((ev) => track.el.addEventListener(ev, syncButtons));
+  ["playing", "pause", "ended", "waiting", "loadstart"].forEach((ev) => track.el.addEventListener(ev, syncButtons));
 
   function togglePlay() {
     if (track.playing || track.waiting) track.pause();
@@ -740,6 +750,7 @@
   function seekTo(t) {
     t = clamp(t, 0, SONG.duration - .05);
     track.el.currentTime = t;
+    track.ended = false;
     clock.sync();
     F.t = t;
     reseek(t);
@@ -787,7 +798,7 @@
     const onStage = sr && sr.top < innerHeight * .35 && sr.bottom > innerHeight * .65;   // the big meter has the floor
     if (now - lastAvoid > 150) { lastAvoid = now; blocked = coversCta(); }
     const peek = now - deckPeek < 4000;   // someone tried to scroll: show them where the controls are
-    const showDeck = pilot.entered && (V.y > innerHeight * .42 || peek) && !onStage && !blocked;
+    const showDeck = pilot.entered && (peek || (V.y > innerHeight * .42 && !onStage && !blocked));
     root.classList.toggle("has-deck", showDeck);
 
     // meters: the deck one always, the stage one while it's on screen
@@ -832,18 +843,41 @@
     setText("stageTime", mmss(F.t));
   }
 
-  // CSS hooks: written only on the few containers whose styles read them — setting them on <html>
-  // would restyle the entire page every frame
-  const varHosts = [".grain", ".nav", ".saga", ".stage", ".deck", ".np", "#discord"].map((q) => $(q)).filter(Boolean);
-  const vars = { kick: -1, beat: -1, level: -1, hat: -1, tension: -1, snare: -1 };
+  // CSS hooks: each var is written only on the elements whose styles read it, and only while their
+  // section is on screen — writing them on containers (or <html>) restyles hundreds of nodes a frame
+  const HOSTS = {
+    kick: [".nav", ".bloodwash", "#splats", ".saga__stamp", "#sagaChart", "#npChip", ".stage__bg", ".stage__live", ".stage__title"],
+    beat: ["#deckAuto", ".stage__bg"],
+    level: ["#npChip", "#dcDuo"],
+    hat: [".grain", "#npChip"],
+    snare: ["#npChip"],
+    tension: [".grain", ".nav"],
+  };
+  const hostEls = new Map();
+  for (const [k, list] of Object.entries(HOSTS)) for (const q of list) {
+    const el = $(q);
+    if (!el) continue;
+    const sec = el.closest("main > section, main > footer");
+    if (!hostEls.has(el)) hostEls.set(el, { sec, top: 0, bot: 0, vars: {} });
+    hostEls.get(el).vars[k] = -1;
+  }
+  let hostsV = -1;
   function cssVars() {
+    if (hostsV !== V.layoutV) {
+      hostsV = V.layoutV;
+      for (const h of hostEls.values()) if (h.sec) { h.top = window.SITE.docTop(h.sec); h.bot = h.top + h.sec.offsetHeight; }
+    }
     const live = F.on && !F.gap;
     const next = { kick: live ? F.kick : 0, beat: live ? F.beat : 0, level: live ? F.level : 0, hat: live ? F.hat : 0, snare: live ? F.snare : 0, tension: F.tension };
-    for (const k in next) {
-      const v = Math.round(next[k] * 1000) / 1000;
-      if (vars[k] === v) continue;
-      vars[k] = v;
-      for (const el of varHosts) el.style.setProperty(`--${k}`, v);
+    const y0 = V.y - innerHeight * .5, y1 = V.y + innerHeight * 1.5;
+    for (const [el, h] of hostEls) {
+      if (h.sec && (h.bot < y0 || h.top > y1)) continue;
+      for (const k in h.vars) {
+        const v = Math.round(next[k] * 1000) / 1000;
+        if (h.vars[k] === v) continue;
+        h.vars[k] = v;
+        el.style.setProperty(`--${k}`, v);
+      }
     }
   }
 
@@ -875,10 +909,11 @@
       pilot.entered = true;
       mediaSession();
       if (!sound) { pilot.on = false; syncButtons(); return; }
-      pilot.on = true;
+      pilot.on = !reduced;
       pilot.run = -1;
       track.play().then(syncButtons).catch((e) => {
         console.warn("play", e);
+        pilot.on = false;            // never leave a locked, silent page
         say("tap play in the player to start the track");
         syncButtons();
       });

@@ -684,7 +684,7 @@ $$("[data-split]").forEach(split);
 // while the track plays, things land on the next beat instead of whenever they scroll in
 const reveal = (el) => (window.SHOW ? window.SHOW.onNextBeat(() => el.classList.add("is-in")) : el.classList.add("is-in"));
 const io = new IntersectionObserver((entries) => {
-  for (const e of entries) if (e.isIntersecting) { reveal(e.target); io.unobserve(e.target); }
+  for (const e of entries) if (e.isIntersecting && state.entered) { reveal(e.target); io.unobserve(e.target); }
 }, { rootMargin: "0px 0px -12% 0px", threshold: 0.01 });
 function observeReveal(els) { els.forEach((el) => io.observe(el)); }
 renderCloset();
@@ -1103,9 +1103,22 @@ function viewFrame(dt) {
 
 let docH = 1, trackDist = 0, chartW = 0, chartH = 0;
 const cardGeo = [];
+const flowEls = $$("main > section, main > footer");
+let flowGeo = [];
+// phones show/hide the URL bar on every scroll reversal (a resize): the stats scene's length is
+// sized off a height that ignores that wobble
+let stableH = innerHeight, stableW = innerWidth;
 function layout() {
+  if (finePointer || innerWidth !== stableW || Math.abs(innerHeight - stableH) > stableH * .22) { stableH = innerHeight; stableW = innerWidth; }
+  // by hand: remember where the visitor is (section + fraction) so a re-measure doesn't move them
+  let anchor = null;
+  if (!view.auto && !view.pre && document.documentElement.classList.contains("is-entered")) {
+    const y0 = scrollY;   // where the visitor is headed, not where the eased camera is
+    const g = flowGeo.find((g) => y0 >= g.top && y0 < g.top + g.h);
+    if (g) anchor = { el: g.el, f: (y0 - g.top) / g.h, y0 };
+  }
   trackDist = Math.max(0, track.scrollWidth - innerWidth);
-  scenes.stats.style.height = `${trackDist + innerHeight * 1.15}px`;
+  scenes.stats.style.height = `${trackDist + stableH * 1.15}px`;
   const H = mainEl.offsetHeight;
   spacer.style.height = `${H}px`;
   docH = view.max = Math.max(1, H - innerHeight);
@@ -1114,10 +1127,21 @@ function layout() {
   for (const c of statCards) cardGeo.push({ c, x: c.offsetLeft + track.offsetLeft, w: c.offsetWidth });
   const cb = $("#sagaChart");
   if (cb && (cb.clientWidth !== chartW || cb.clientHeight !== chartH)) { chartW = cb.clientWidth; chartH = cb.clientHeight; chart.build(); }
+  flowGeo = flowEls.map((el) => ({ el, top: docTop(el), h: Math.max(1, el.offsetHeight) }));
+  if (anchor) {
+    const g = flowGeo.find((g) => g.el === anchor.el);
+    const y = clamp(g.top + anchor.f * g.h, 0, view.max), d = y - anchor.y0;
+    if (Math.abs(d) > .5) { scrollTo(0, y); view.y = clamp(view.y + d, 0, view.max); view.target = y; }
+  }
   view.layoutV++;
 }
 addEventListener("resize", layout);
 addEventListener("load", layout);
+// content that changes height later (Discord presence, Roblox lists, fonts) re-measures the page
+{
+  let q = 0;
+  new ResizeObserver(() => { if (!q) q = requestAnimationFrame(() => { q = 0; layout(); }); }).observe(mainEl);
+}
 document.fonts?.ready.then(layout);
 layout();
 
@@ -1128,7 +1152,7 @@ function sceneProgress(el) {
 
 // keyboard users by hand: bring whatever gets focus into view
 document.addEventListener("focusin", (e) => {
-  if (view.auto || !mainEl.contains(e.target)) return;
+  if (view.auto || !mainEl.contains(e.target) || !e.target.matches(":focus-visible")) return;
   const r = e.target.getBoundingClientRect();
   if (r.top < 70 || r.bottom > innerHeight - 40) scrollTo(0, clamp(r.top + view.y - innerHeight * .35, 0, view.max));
 });
@@ -1195,7 +1219,7 @@ function updateSaga(k) {
 }
 
 let lastNow = performance.now();
-const perf = { ema: 16.7, tier: 2, since: 0 };   // adaptive quality: 2 full, 1 lighter, 0 lightest
+const perf = { ema: 16.7, tier: 2, since: 0, floor: 16.7, work: 0 };   // adaptive quality: 2 full, 1 lighter, 0 lightest
 function frame(now) {
   const dt = clamp((now - lastNow) / 1000, .001, .1);
   lastNow = now;
@@ -1293,10 +1317,14 @@ function frame(now) {
   }
   window.STAGE3D?.frame(now, dt);   // the 3d world renders last, on top
 
-  // adaptive quality: if frames run long for a while, step down (never back up mid-show)
+  // adaptive quality: if frames run long for a while, step down (never back up mid-show). A display
+  // capped at 30 Hz gives steady 33 ms frames with little work in them: that isn't overload.
   perf.ema = lerp(perf.ema, dt * 1000, .05);
+  perf.floor = Math.min(dt * 1000, perf.floor + .05);
+  perf.work = lerp(perf.work, performance.now() - now, .05);
   perf.since += dt;
-  if (state.entered && perf.ema > 24 && perf.since > 2.5 && perf.tier > 0) {
+  const overloaded = perf.ema > 24 && (perf.ema > perf.floor * 1.4 || perf.work > 11);
+  if (state.entered && overloaded && perf.since > 2.5 && perf.tier > 0) {
     perf.tier--; perf.since = 0;
     document.documentElement.dataset.tier = perf.tier;
     GL?.setQuality?.(perf.tier);
@@ -1416,6 +1444,7 @@ function enter(sound = true) {
   if (sound) window.SHOW?.unlock();   // still inside the tap: wake the audio context now
   if (!gate.classList.contains("is-ready")) { enterQueued = sound ? true : "quiet"; return; }
   state.entered = true;
+  perf.ema = 16.7; perf.since = 0;
   view.jump(0);
   window.SHOW?.enter(sound);
   window.STAGE3D?.enter?.(sound);

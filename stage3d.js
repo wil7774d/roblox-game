@@ -341,16 +341,16 @@ async function boot() {
     S(.908, "hero", "bob"),
     S(3.408, "hero", "point", { snap: 1 }), S(3.636, "hero", "flex", { snap: 1 }), S(4.318, "hero", "tpose", { snap: 1 }),
     S(4.546, "hero", "flip", { snap: 1 }), S(5.454, "hero", "dance"), S(6.364, "hero", "crouch", { snap: 1 }),
-    S(6.822, "deck", "sit", { enter: "hop", dur: .45 }),            // onto the player
+    S(7.271, "deck", "sit", { enter: "hop", dur: .45 }),            // onto the player
     S(11.817, "deck", "sitWave"), S(12.727, "deck", "sitFlip", { snap: 1 }), S(13.635, "deck", "sit"),
     S(14.098, "deck", "crouch", { snap: 1 }),
     S(T(8), "run", "run", { enter: "hop", dur: .35 }),               // the 808s: sprint along the stats
     S(T(12) - .2, "chart", "ride", { enter: "hop", dur: .6 }),      // surf the player count up to 497
     S(T(14), "peak", "lookup", { enter: "hop", dur: .45 }),         // …and the hammer shows up
     S(T(15), "center", "crouch", { enter: "hop", dur: .5 }),
-    S(SIL[0], "center", "lookup"),
+    S(SIL[0], "center", "lookup", { snap: 1 }),
     S(DROP, "center", "fall", { enter: "launch" }),                  // BONK
-    S(DROP + 1.16, "center", "idle", { enter: "spawn", dur: .62 }), // back, mad
+    S(DROP + 1.35, "center", "idle", { enter: "spawn", dur: .48 }), // back, mad
     S(DROP + 4 * BEAT, "center", "flip", { snap: 1 }),
     S(T(20), "center", "flip2", { snap: 1 }), S(T(21), "center", "headbang"), S(T(22), "center", "flip", { snap: 1 }), S(T(23), "center", "flip2", { snap: 1 }),
     S(T(24), "deck", "sit", { enter: "hop", dur: .5 }),             // the reupload
@@ -370,7 +370,7 @@ async function boot() {
     ...Array.from({ length: 12 }, (_, c) => S(T(116 + c * 2), c === 6 ? "showcase" : c % 2 ? "cornerL" : "cornerR", ["flip2", "headbang", "flip", "dance"][c % 4], { enter: "pop" })),
     S(T(140), "discord", "wave", { enter: "pop" }), S(T(142), "discord", "flip2", { snap: 1 }),
     S(T(144), "discord", "idle", { enter: "oof" }),                  // oof.
-    S(T(144) + 6 * BEAT, "center", "idle", { enter: "spawn", dur: .5 }), S(T(144) + 8 * BEAT, "center", "wave"),
+    S(T(144) + 4 * BEAT, "center", "idle", { enter: "spawn", dur: .5 }), S(T(144) + 6 * BEAT, "center", "wave"),
   ];
   const LINES = [
     [1.0, "yo"], [2.0, "welcome to finalarc"], [4.6, "this one's for roblox"], [7.3, "sit back, i drive"],
@@ -378,7 +378,7 @@ async function boot() {
     [DROP + 2.1, "roblox you're a ##### ####"], [T(20) + .2, "ALL of us."], [T(24) + .3, "reuploaded. we back"],
     [T(28) + .8, "the fit tho"], [T(36) + .7, "rate the closet"], [T(49), "still here btw"], [T(65), "the badges are real"],
     [T(80) + .2, "DROP TWO"], [T(104) + .7, "add me on discord"], [T(111) + .1, "wait go back"], [T(112) + .2, "FINAL ARC"],
-    [T(144) + 8 * BEAT, "gg"],
+    [T(144) + 6 * BEAT, "gg"],
   ].map(([t, text]) => ({ t, text, d: Math.min(2.6, Math.max(1.4, text.length * .09)) }));
   const SYS = [[T(14) + 1.2, "[ Content Deleted ]"], [DROP + 1.4, "this experience has been taken down"], [T(124) + .3, "[ Content Deleted ]"]];
 
@@ -391,6 +391,7 @@ async function boot() {
     const drop1 = DROP + 4 * BEAT;
     if (t >= drop1 + i * BEAT && t < T(24)) return { key: "d1", t0: drop1 + i * BEAT, at: armyLayout("drop", i), clip: (Math.floor((t - SONG.offset) / BAR) + i) % 3 === 2 ? "headbang" : i % 2 ? "flip2" : "flip", enter: "spawn", dur: .35, aim: 1 };
     if (t >= T(24) && t < T(24) + .4 + i * .05) return { key: "d1x", t0: T(24), enter: "poof" };
+    if (i < 6 && t >= T(104) && t < T(104) + .4 + i * .05) return { key: "d2x", t0: T(104), enter: "poof" };
     if (i < 6 && t >= T(80) + i * BEAT && t < T(104)) return { key: "d2", t0: T(80) + i * BEAT, at: armyLayout("stage", i), clip: (Math.floor((t - SONG.offset) / BAR) % 8 === 7) ? "flip2" : "headbang", enter: "spawn", dur: .3 };
     if (t >= T(112) && t < T(116)) return { key: "d3", t0: T(112), at: armyLayout("drop", i), clip: i % 2 ? "flip2" : "flip", enter: "pop" };
     const c = recapCut(t);
@@ -430,8 +431,8 @@ async function boot() {
       else if (t < SIL[0]) { const k = clamp((t - T(14) - 1) / (SIL[0] - T(14) - 1)); s = { p: hover, th: lerp(.42, COCK, k * k), tremble: k, bob: 1 - k }; }
       else if (t < DROP - SW) s = { p: hover, th: COCK };
       else if (t < DROP + .3) s = swing(DROP);
-      else if (t < DROP + 1.2) s = { p: strike, th: HIT };
-      else if (t < DROP + 2.1) { const k = easeIO((t - DROP - 1.2) / .9); s = { p: mixP(strike, hover, k), th: lerp(HIT, .42, k) }; }
+      else if (t < DROP + .8) s = { p: strike, th: HIT };
+      else if (t < DROP + 1.5) { const k = easeIO((t - DROP - .8) / .7); s = { p: mixP(strike, hover, k), th: lerp(HIT, .42, k) }; }
       else if (t < T(24)) s = { p: hover, th: .42 + .07 * Math.sin(t * 2.1), bob: 1 };
       else { const k = easeIO((t - T(24)) / .9); s = { p: mixP(hover, { x: hover.x + W * .2, y: -H * .9 }, k), th: .42 + k * 3 }; }
     } else if (t >= T(124) - 1.4 && t < T(126)) {
@@ -477,6 +478,7 @@ async function boot() {
         else if (cue.enter === "pop") { a.mode = null; a.snap = true; a.forcefield(.8); }
         else if (cue.enter === "hop" && live && !first) a.mode = { kind: "hop", t0: cue.t0, dur: cue.dur || .45, from: a.pos.clone(), fromS: a.s };
         else if (!cue.keepPlace || first) { a.mode = null; a.snap = true; }
+        if (!adt || cue.snapPose) a.snap = true;
       }
     }
     if (a.hidden && a.mode?.kind !== "poof" && a.mode?.kind !== "launch") { a.g.visible = false; return; }
@@ -518,7 +520,7 @@ async function boot() {
     a.tc += adt;
     const pose = (CLIPS[clip] || CLIPS.idle)(a.tc, beats, kick);
     if (a.snap) { a.rig.update(pose, 1, 60); a.snap = false; }
-    else a.rig.update(pose, adt, clip === "land" || cue.snapPose ? 34 : 15);
+    else a.rig.update(pose, adt, clip === "land" ? 34 : 15);
     a.yaw += (a.yawT - a.yaw) * (1 - Math.exp(-adt * 9));
     a.g.position.copy(a.pos);
     const land = now - a.landAt < .25 && now >= a.landAt ? 1 - (now - a.landAt) / .25 : 0;
@@ -543,8 +545,13 @@ async function boot() {
   }
 
   // the hero's cue when nobody's driving: chill wherever the page is
+  let endedAt = 0;
   function manualCue() {
     const y = V.y;
+    if (window.SHOW?.track?.ended) {                 // the song's over: stay out front and say gg
+      if (!endedAt) endedAt = rt;
+      if (rt - endedAt < 7) return { key: "m-end", t0: endedAt, at: A.center(), clip: "wave", enter: "hop" };
+    } else endedAt = 0;
     const av = el.avatar;
     if (y < H * .55) return { key: "m-hero", t0: rt, at: A.hero(), clip: ["idle", "wave", "idle", "flex"][Math.floor(rt / 3.2) % 4], enter: "hop" };
     if (av) { const top = SITE.docTop(av), h = av.offsetHeight; if (y > top - H * .45 && y < top + h - H * .55) return { key: "m-show", t0: rt, at: A.showcase(), clip: ["idle", "flex", "idle", "wave"][Math.floor(rt / 3.2) % 4], enter: "hop" }; }
@@ -557,12 +564,19 @@ async function boot() {
     dt = Math.min(dt, .1);
     rt = nowMs / 1000;
     if (!entered) return;
-    frameRects = new Map();
+    frameRects.clear();
     const SHOW = window.SHOW, F = SHOW?.F;
     const driving = !!SHOW?.driving;
     const t = F ? F.t : 0;
     const jumped = driving && (t < lastT - .05 || t - lastT > .5 || lastDriving !== driving);
     lastT = t; lastDriving = driving;
+    if (jumped) {                       // a seek: nothing from before it lingers
+      dbL.fill(0); dbLive = .05;
+      for (let i = 0; i < MAXD; i++) debris.setMatrixAt(i, tmpM.makeScale(0, 0, 0));
+      debris.instanceMatrix.needsUpdate = true;
+      ringT = -9;
+      for (const a of [hero, ...army]) a.reassemble();
+    }
     const gap = driving && F?.gap;
     const adt = gap ? 0 : dt;
     const beats = driving ? (t - (SONG?.offset || 0)) / BEAT : rt * 2.2;
@@ -572,6 +586,7 @@ async function boot() {
     // hammer first (the army aims at it)
     const hs = driving ? hammerAt(t) : null;
     hammer.pivot.visible = !!hs;
+    if (!hs) hammer.glow.intensity = 0;
     let aimX = null;
     if (hs) {
       hammerL = hs.L;
@@ -579,8 +594,9 @@ async function boot() {
       const tr = hs.tremble ? hs.tremble * .04 * Math.sin(rt * 70) : 0;
       toWorld(hs.p.x, hs.p.y + (hs.bob ? Math.sin(rt * 1.7) * H * .012 : 0), z, hammer.pivot.position);
       hammer.pivot.scale.setScalar((hs.L * u(z)) / 6.6);
-      hammer.pivot.rotation.z = (gap ? hammer.frozen ?? hs.th : hs.th) + tr;
-      if (!gap) hammer.frozen = hs.th;
+      hammer.pivot.rotation.z = hs.th + tr;
+      hammer.pivot.updateMatrixWorld(true);
+      hammer.glowAt.getWorldPosition(hammer.glow.position);
       hammer.glow.intensity = 1.5 + 3 * (F?.tension || 0) + 4 * kick;
       aimX = hs.p.x - Math.sin(hs.th) * hs.L;
       busy = true;
@@ -605,7 +621,8 @@ async function boot() {
     // army
     for (let i = 0; i < ARMY_MAX; i++) {
       const a = army[i];
-      const c = driving && !reduced ? armyCue(i, t) : null;
+      let c = driving && !reduced ? armyCue(i, t) : null;
+      if (i >= armyN && (a.key === "trim" || (a.g.visible && !a.hidden))) c = { key: "trim", t0: a.trimAt ??= (driving ? t : rt), enter: "poof" };
       if (c && aimX != null && c.aim !== 0) c.aimX = aimX;
       drive(a, c, driving ? t : rt, driving ? "song" : "real", jumped, adt, beats + i * .07, kick);
       busy ||= a.g.visible;
@@ -641,6 +658,7 @@ async function boot() {
     const vis = hero.g.visible && !hero.broken;
     let line = null;
     if (driving) { for (const l of LINES) if (t >= l.t && t < l.t + l.d) line = l.text; }
+    else if (hero.key === "m-end") line = "gg";
     if (vis) {
       const p = toScreen(hero.g.localToWorld(tmp.set(0, hero.top + .35, 0)));
       placeLabel(tag, p.x, p.y, true);
@@ -725,9 +743,11 @@ async function boot() {
     const decal2 = decal.clone(); decal2.rotation.y = Math.PI; decal2.position.z = -1.012;
     head.add(block, faceA, faceB, band, decal, decal2);
     inner.add(handle, wrap, pommel, head);
-    const glow = new THREE.PointLight(0xff2433, 2, 14, 1.4); glow.position.set(0, 6.6, 2.4); inner.add(glow);
+    // the glow lives in the scene, not the hammer, so the light count never changes (no shader recompiles)
+    const glowAt = new THREE.Object3D(); glowAt.position.set(0, 6.6, 2.4); inner.add(glowAt);
+    const glow = new THREE.PointLight(0xff2433, 0, 14, 1.4); scene.add(glow);
     pivot.visible = false;
-    return { pivot, head, glow, frozen: null };
+    return { pivot, head, glow, glowAt };
   }
   function banTexture() {
     const c = document.createElement("canvas"); c.width = 512; c.height = 216;
@@ -818,7 +838,7 @@ async function avatarLook() {
       else if (c.legs) look.colors.legL = c.legs;
     }
   } catch {}
-  try { localStorage.setItem(KEY, JSON.stringify({ t: Date.now(), d: look })); } catch {}
+  if (look.note !== "default look") try { localStorage.setItem(KEY, JSON.stringify({ t: Date.now(), d: look })); } catch {}
   return look;
 }
 
