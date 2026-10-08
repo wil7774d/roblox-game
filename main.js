@@ -282,6 +282,7 @@ function renderGroups(list) {
         <span class="group__name">${esc(g.name)}</span>
         <span class="group__role mono">${esc(g.role || "member")}</span>
         <span class="group__members mono">${compact(g.members || 0)} members</span>
+        <span class="group__go" aria-hidden="true">↗</span>
       </a>
     </li>`).join("");
   observeReveal($$(".group", el));
@@ -445,6 +446,8 @@ const GL = (() => {
   const fs = `
   precision highp float;
   uniform vec2 uRes; uniform float uTime; uniform vec2 uMouse; uniform float uScroll; uniform float uIntro; uniform float uVel; uniform float uBlood;
+  // the music: 64-band spectrum + what the show is doing right now
+  uniform sampler2D uSpec; uniform float uKick; uniform float uLevel; uniform float uTension; uniform float uDrop; uniform float uShock; uniform float uRewind; uniform float uAudio; uniform float uDark;
 
   float hash(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
   float noise(vec2 p){
@@ -460,8 +463,15 @@ const GL = (() => {
   }
   mat2 rot(float a){ float c=cos(a), s=sin(a); return mat2(c,-s,s,c); }
 
+  float spec(float x){ return texture2D(uSpec, vec2(clamp(x, 0., 1.) * .97 + .015, .5)).r; }
+
   void main(){
     vec2 uv = (gl_FragCoord.xy - .5*uRes) / uRes.y;
+    // tape rewind / hard cuts: tracking wobble + torn bands
+    if (uRewind > .001) {
+      float tear = step(.84, noise(vec2(floor(uv.y * 16.), floor(uTime * 26.))));
+      uv.x += ((noise(vec2(uv.y * 34., uTime * 40.)) - .5) * .05 + tear * .09) * uRewind;
+    }
     float t = uTime * .06;
 
     // smoke
@@ -493,31 +503,50 @@ const GL = (() => {
     au -= uMouse * .04;
     au *= rot(sin(s * 3.14159) * .9 - .25 + s * .6);
     vec2 c = vec2(0., -1.05 + .35 * sin(s * 6.2832));
-    float rad = mix(.55, 1.0, uIntro) + .08 * sin(uTime*.25);
+    // the arc breathes with the kick and tightens through every run-up
+    float rad = mix(.55, 1.0, uIntro) + .08 * sin(uTime*.25) - uTension * .1 + uKick * .03;
     vec2 d = au - c + (q - .5) * .12;
     d.x += uBlood * (noise(vec2(d.y * 34., uTime * 7.)) - .5) * .06;
-    float ring = abs(length(d) - rad);
+    float L = length(d);
     float ang = atan(d.x, d.y);
+    // the arc IS the spectrum: bass at the crown, highs out at the tips, mirrored
+    float sp = spec(abs(ang) / 1.9) * uAudio;
+    float amp = .045 + .09 * uLevel + .05 * uTension;
+    float outer = rad + sp * amp, inner = rad - sp * amp * .55;
+    float ring = abs(L - outer);
+    float ring2 = abs(L - inner);
     float span = smoothstep(1.9, .2, abs(ang)) * uIntro;
     // cracked arc: gaps + flicker while bleeding
     span *= 1. - uBlood * smoothstep(.1, .02, abs(ang - .35));
     span *= 1. - uBlood * smoothstep(.07, .01, abs(ang + .62));
     span *= 1. - uBlood * .6 * step(.9, hash(vec2(floor(uTime * 14.), 7.)));
+    float boost = 1. + uKick * .9 + uTension * .9 + uDrop * 1.4;
     float core = .0025 / (ring + .002);
     float glow = .03 / (ring + .03);
-    col += a1 * (core * .9 + glow * .45) * span;
+    col += a1 * (core * .9 + glow * .45) * span * boost;
     col += vec3(1.) * smoothstep(.004, 0., ring) * span * .6;
+    // the echo line inside + the energy between them
+    col += a1 * (.0014 / (ring2 + .002)) * span * uAudio * .6;
+    float fill = smoothstep(outer + .004, outer - .004, L) * smoothstep(inner - .004, inner + .004, L);
+    col += mix(a1, vec3(1.), .25) * fill * span * uAudio * (.1 + uKick * .12);
+    // shockwave off every drop
+    if (uShock < 2.6) {
+      float sw = abs(L - (rad + uShock * 1.7));
+      col += mix(a1, vec3(1., .2, .15), .5) * (.014 / (sw + .014)) * (1. - uShock / 2.6) * smoothstep(2.6, .3, abs(ang));
+    }
 
     // light bleed from under the arc
-    float under = smoothstep(rad, rad - .9, length(d)) * span;
-    col += a1 * under * f * .25;
+    float under = smoothstep(rad, rad - .9, L) * span;
+    col += a1 * under * f * (.25 + uLevel * .12 + uKick * .15);
 
     // streaks on fast scroll
     col += a1 * smoothstep(.97, 1., noise(vec2(uv.y * 80., t*2.))) * clamp(abs(uVel), 0., 1.) * .25;
 
     // vignette + dither
     col = mix(col, vec3(dot(col, vec3(.3, .59, .11))) * vec3(1.45, .3, .32), uBlood * .55);
-    col *= 1. - .55 * dot(uv*.75, uv*.75) - uBlood * .2 * dot(uv, uv);
+    col += vec3(1., .3, .22) * uDrop * .16;
+    col *= 1. - (.55 + uTension * .35) * dot(uv*.75, uv*.75) - uBlood * .2 * dot(uv, uv);
+    col *= 1. - uDark * .92;
     col += (hash(gl_FragCoord.xy + uTime) - .5) / 255.;
     gl_FragColor = vec4(col, 1.);
   }`;
@@ -543,7 +572,19 @@ const GL = (() => {
   gl.enableVertexAttribArray(loc);
   gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   const U = {};
-  for (const n of ["uRes", "uTime", "uMouse", "uScroll", "uIntro", "uVel", "uBlood"]) U[n] = gl.getUniformLocation(prog, n);
+  for (const n of ["uRes", "uTime", "uMouse", "uScroll", "uIntro", "uVel", "uBlood", "uSpec", "uKick", "uLevel", "uTension", "uDrop", "uShock", "uRewind", "uAudio", "uDark"]) U[n] = gl.getUniformLocation(prog, n);
+
+  // the spectrum lives in a 64×1 texture, refreshed every frame
+  const tex = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, 64, 1, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, new Uint8Array(64));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.uniform1i(U.uSpec, 0);
 
   function resize() {
     const dpr = Math.min(devicePixelRatio || 1, 1.5) * (innerWidth < 760 ? .7 : .85);
@@ -555,7 +596,7 @@ const GL = (() => {
   addEventListener("resize", resize);
 
   return {
-    draw({ time, mx, my, scroll, intro, vel, blood }) {
+    draw({ time, mx, my, scroll, intro, vel, blood, spec, kick = 0, level = 0, tension = 0, drop = 0, shock = 9, rewind = 0, audio = 0, dark = 0 }) {
       gl.uniform2f(U.uRes, canvas.width, canvas.height);
       gl.uniform1f(U.uTime, time);
       gl.uniform2f(U.uMouse, mx, my);
@@ -563,6 +604,15 @@ const GL = (() => {
       gl.uniform1f(U.uIntro, intro);
       gl.uniform1f(U.uVel, vel);
       gl.uniform1f(U.uBlood, blood);
+      if (spec) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 64, 1, gl.LUMINANCE, gl.UNSIGNED_BYTE, spec);
+      gl.uniform1f(U.uKick, kick);
+      gl.uniform1f(U.uLevel, level);
+      gl.uniform1f(U.uTension, tension);
+      gl.uniform1f(U.uDrop, drop);
+      gl.uniform1f(U.uShock, shock);
+      gl.uniform1f(U.uRewind, rewind);
+      gl.uniform1f(U.uAudio, audio);
+      gl.uniform1f(U.uDark, dark);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     },
   };
@@ -584,8 +634,10 @@ function split(el) {
 renderDiscordCards();
 $$("[data-split]").forEach(split);
 
+// while the track plays, things land on the next beat instead of whenever they scroll in
+const reveal = (el) => (window.SHOW ? window.SHOW.onNextBeat(() => el.classList.add("is-in")) : el.classList.add("is-in"));
 const io = new IntersectionObserver((entries) => {
-  for (const e of entries) if (e.isIntersecting) { e.target.classList.add("is-in"); io.unobserve(e.target); }
+  for (const e of entries) if (e.isIntersecting) { reveal(e.target); io.unobserve(e.target); }
 }, { rootMargin: "0px 0px -12% 0px", threshold: 0.01 });
 function observeReveal(els) { els.forEach((el) => io.observe(el)); }
 renderCloset();
@@ -625,57 +677,114 @@ manifesto.innerHTML = manifesto.textContent.trim().split(/\s+/).map((w) => `<spa
 const mWords = $$(".mw", manifesto);
 
 /* --------------------------------------------------------------------------
-   Cursor, magnetic, tilt, copy
+   Pointer: cursor, magnetic buttons, card tilt — one delegated listener set,
+   all motion eased in the frame loop (no per-event transform jumps)
    -------------------------------------------------------------------------- */
-const pointer = { x: innerWidth / 2, y: innerHeight / 2, nx: 0, ny: 0 };
-const cur = { x: pointer.x, y: pointer.y, rx: pointer.x, ry: pointer.y };
-const cursorEl = $(".cursor"), dotEl = $(".cursor__dot"), ringEl = $(".cursor__ring"), labelEl = $(".cursor__label");
+const pointer = { x: innerWidth / 2, y: innerHeight / 2, nx: 0, ny: 0, in: false };
+const cur = { x: pointer.x, y: pointer.y, rx: pointer.x, ry: pointer.y, w: 34, h: 34, r: 17, down: 0, stick: null, label: "", vis: 0 };
+const cursorEl = $(".cursor"), dotEl = $(".cursor__dot"), ringEl = $(".cursor__ring"), tagEl = $(".cursor-tag");
+const hasCursor = finePointer && !reduced;
+if (hasCursor) document.documentElement.classList.add("has-cursor");
+
+const STICK = ".btn, [data-magnetic], .gate__enter, .gate__quiet, .np, .deck button, .stage__play";
+let hoverEl = null, tiltEl = null, magEl = null;
 
 addEventListener("pointermove", (e) => {
-  pointer.x = e.clientX; pointer.y = e.clientY;
+  pointer.x = e.clientX; pointer.y = e.clientY; pointer.in = true;
   pointer.nx = (e.clientX / innerWidth) * 2 - 1;
   pointer.ny = -((e.clientY / innerHeight) * 2 - 1);
+  // glow follows the pointer on every card
+  const card = e.target.closest?.(".card");
+  if (card) {
+    const r = card.getBoundingClientRect();
+    card.style.setProperty("--mx", `${((e.clientX - r.left) / r.width) * 100}%`);
+    card.style.setProperty("--my", `${((e.clientY - r.top) / r.height) * 100}%`);
+  }
+  const t = e.target.closest?.("[data-tilt]");
+  if (t !== tiltEl) { tiltEl?.classList.remove("is-hover"); tiltEl = t; t?.classList.add("is-hover"); }
 }, { passive: true });
-if (finePointer && !reduced) document.documentElement.classList.add("has-cursor");
-addEventListener("pointerdown", () => cursorEl.classList.add("is-down"));
-addEventListener("pointerup", () => cursorEl.classList.remove("is-down"));
+document.addEventListener("pointerleave", () => { pointer.in = false; });
+addEventListener("pointerdown", () => (cur.down = 1));
+addEventListener("pointerup", () => (cur.down = 0));
 
-function bindCursor(els) {
-  els.forEach((el) => {
-    const quiet = el.matches(".btn, [data-magnetic]");
-    el.addEventListener("pointerenter", () => {
-      if (quiet) return cursorEl.classList.add("is-hidden");
-      labelEl.textContent = el.dataset.cursor;
-      cursorEl.classList.add("is-active");
-    });
-    el.addEventListener("pointerleave", () => cursorEl.classList.remove("is-active", "is-hidden"));
-  });
-}
-bindCursor($$("[data-cursor]"));
-
-$$("[data-magnetic]").forEach((el) => {
-  if (!finePointer || reduced) return;
-  el.addEventListener("pointermove", (e) => {
-    const r = el.getBoundingClientRect();
-    el.style.transform = `translate(${(e.clientX - r.left - r.width / 2) * .25}px, ${(e.clientY - r.top - r.height / 2) * .35}px)`;
-  });
-  el.addEventListener("pointerleave", () => { el.style.transition = "transform .6s cubic-bezier(.16,1,.3,1), color .45s, border-color .45s"; el.style.transform = ""; setTimeout(() => (el.style.transition = ""), 600); });
+document.addEventListener("pointerover", (e) => {
+  const el = e.target.closest?.(`[data-cursor], ${STICK}, a, button, [role=slider]`);
+  if (el === hoverEl) return;
+  hoverEl = el;
+  cur.stick = el && el.matches(STICK) ? el : null;
+  cur.label = el && !cur.stick ? el.dataset.cursor || "" : "";
+  cursorEl.classList.toggle("is-link", !!el && !cur.stick && !cur.label);
+  cursorEl.classList.toggle("is-label", !!cur.label);
+  cursorEl.classList.toggle("is-stuck", !!cur.stick);
+  tagEl.textContent = cur.label;
+  tagEl.classList.toggle("is-on", !!cur.label);
+  const m = el?.closest("[data-magnetic]") || null;
+  if (m && !m.querySelector(":scope > .btn__in")) {
+    const inner = document.createElement("span");
+    inner.className = "btn__in";
+    while (m.firstChild) inner.append(m.firstChild);
+    m.append(inner);
+  }
+  magEl = m;
 });
+function bindCursor() {}   // delegated: kept so late-rendered markup can call it harmlessly
+function bindTilt() {}
 
-function bindTilt(els) {
-  els.forEach((el) => {
-    el.addEventListener("pointermove", (e) => {
+const mags = new Map(), tilts = new Map();
+function pointerFrame(dt) {
+  const k = (b) => 1 - Math.pow(1 - b, dt * 60);
+  // magnetic: the button leans toward the pointer, its label leans a bit further
+  if (hasCursor && magEl && !mags.has(magEl)) mags.set(magEl, { x: 0, y: 0, inner: $(":scope > .btn__in", magEl) });
+  for (const [el, s] of mags) {
+    let tx = 0, ty = 0;
+    if (el === magEl && hasCursor && el.isConnected) {
       const r = el.getBoundingClientRect();
-      const px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
-      el.style.setProperty("--mx", `${px * 100}%`);
-      el.style.setProperty("--my", `${py * 100}%`);
-      if (!finePointer || reduced || !el.classList.contains("tilt-live")) return;
-      el.style.transform = `perspective(1000px) rotateX(${(.5 - py) * 7}deg) rotateY(${(px - .5) * 9}deg)`;
-    });
-    el.addEventListener("pointerleave", () => { if (el.classList.contains("tilt-live")) el.style.transform = ""; });
-  });
+      tx = (pointer.x - (r.left + r.width / 2 - s.x)) * .22;
+      ty = (pointer.y - (r.top + r.height / 2 - s.y)) * .32;
+    }
+    s.x = lerp(s.x, tx, k(.16)); s.y = lerp(s.y, ty, k(.16));
+    if (el !== magEl && Math.abs(s.x) + Math.abs(s.y) < .05) { el.style.transform = ""; if (s.inner) s.inner.style.transform = ""; mags.delete(el); continue; }
+    el.style.transform = `translate3d(${s.x.toFixed(2)}px, ${s.y.toFixed(2)}px, 0)`;
+    if (s.inner) s.inner.style.transform = `translate3d(${(s.x * .45).toFixed(2)}px, ${(s.y * .45).toFixed(2)}px, 0)`;
+  }
+  // tilt: small, eased, and only once a card has finished revealing
+  if (tiltEl && hasCursor && tiltEl.classList.contains("tilt-live") && !tilts.has(tiltEl)) tilts.set(tiltEl, { rx: 0, ry: 0 });
+  for (const [el, s] of tilts) {
+    let rx = 0, ry = 0;
+    if (el === tiltEl && el.isConnected) {
+      const r = el.getBoundingClientRect();
+      const px = clamp((pointer.x - r.left) / r.width), py = clamp((pointer.y - r.top) / r.height);
+      rx = (.5 - py) * 6; ry = (px - .5) * 8;
+    }
+    s.rx = lerp(s.rx, rx, k(.12)); s.ry = lerp(s.ry, ry, k(.12));
+    if (el !== tiltEl && Math.abs(s.rx) + Math.abs(s.ry) < .02) { el.style.transform = ""; el.classList.remove("is-tilting"); tilts.delete(el); continue; }
+    el.classList.add("is-tilting");
+    el.style.transform = `perspective(900px) rotateX(${s.rx.toFixed(3)}deg) rotateY(${s.ry.toFixed(3)}deg)`;
+  }
+  if (!hasCursor) return;
+  // cursor: dot tracks tight, ring trails — and wraps whatever button you're on
+  cur.vis = lerp(cur.vis, pointer.in ? 1 : 0, k(.2));
+  cur.x = lerp(cur.x, pointer.x, k(.55)); cur.y = lerp(cur.y, pointer.y, k(.55));
+  let tx = pointer.x, ty = pointer.y, tw = 34, th = 34, tr = 17;
+  if (cur.stick && cur.stick.isConnected) {
+    const r = cur.stick.getBoundingClientRect();
+    tx = r.left + r.width / 2; ty = r.top + r.height / 2;
+    tw = r.width + 12; th = r.height + 12; tr = th / 2;
+  } else if (cur.label) { tw = th = 64; tr = 32; }
+  else if (cursorEl.classList.contains("is-link")) { tw = th = 46; tr = 23; }
+  const f = cur.stick ? .3 : .2;
+  cur.rx = lerp(cur.rx, tx, k(f)); cur.ry = lerp(cur.ry, ty, k(f));
+  cur.w = lerp(cur.w, tw, k(.22)); cur.h = lerp(cur.h, th, k(.22)); cur.r = lerp(cur.r, tr, k(.22));
+  const kick = window.SHOW?.F.on ? window.SHOW.F.kick : 0;
+  dotEl.style.transform = `translate3d(${(cur.x - 3).toFixed(1)}px, ${(cur.y - 3).toFixed(1)}px, 0) scale(${(cur.down ? .5 : 1) * (cur.stick ? .8 : 1)})`;
+  ringEl.style.transform = `translate3d(${(cur.rx - cur.w / 2).toFixed(1)}px, ${(cur.ry - cur.h / 2).toFixed(1)}px, 0)`;
+  ringEl.style.width = `${cur.w.toFixed(1)}px`;
+  ringEl.style.height = `${cur.h.toFixed(1)}px`;
+  ringEl.style.borderRadius = `${cur.r.toFixed(1)}px`;
+  ringEl.style.opacity = (cur.vis * (cur.stick ? .9 : .55 + kick * .45)).toFixed(3);
+  dotEl.style.opacity = cur.vis.toFixed(3);
+  tagEl.style.transform = `translate3d(${(cur.x + 20).toFixed(1)}px, ${(cur.y + 18).toFixed(1)}px, 0)`;
 }
-bindTilt($$("[data-tilt]"));
 
 const toast = $("#toast");
 let toastT;
@@ -744,10 +853,136 @@ const drips = (() => {
 const saga = {
   root: scenes.saga, sticky: $(".saga .sticky"),
   chaps: $$(".saga__chap"), hud: $$(".saga__hud span"),
-  rise: $(".saga__line--rise"), fall: $(".saga__line--fall"), re: $(".saga__line--re"),
-  area: $(".saga__area"), peak: $(".saga__peak"), dripsBox: $("#drips"),
+  dripsBox: $("#drips"),
   active: -1, prog: 0, fallen: false,
 };
+
+/* --- saga: the player chart ---
+   Drawn at the real pixel size (no stretched viewBox), so the peak marker sits
+   exactly on the peak. The shape is a reconstruction; the 497 is the record. */
+const chart = (() => {
+  const box = $("#sagaChart");
+  const PEAK = CONFIG.game.peakCCU, YMAX = 550, XPEAK = .56, XRE = .645, DAY = .04;
+  const R = rng(497);
+  const lg = (x) => 1 / (1 + Math.exp(-(x - .34) * 13));
+  const ph = Math.PI / 2 - (XPEAK / DAY) * Math.PI * 2;      // a daily high lands on the peak
+  const rise = [], re = [];
+  for (let i = 0; i <= 240; i++) {
+    const x = (i / 240) * XPEAK;
+    const base = (lg(x) - lg(0)) / (lg(XPEAK) - lg(0));
+    const day = Math.sin((x / DAY) * Math.PI * 2 + ph);
+    const v = (base * (1 + .075 * day * (.3 + .7 * base))) / 1.075 + (i < 240 ? (R() - .5) * .018 * base : 0);
+    rise.push([x, i < 240 ? clamp(v, 0, .985) * PEAK : PEAK]);
+  }
+  for (let i = 0; i <= 120; i++) {
+    const x = XRE + (i / 120) * (1 - XRE);
+    const base = 1 - Math.exp(-(x - XRE) * 10);
+    const day = Math.sin((x / DAY) * Math.PI * 2 + 1.1);
+    re.push([x, Math.max(0, base * (.055 + .01 * day) * PEAK + (R() - .5) * 2 * base)]);
+  }
+
+  let W = 0, H = 0, els = null, riseLen = 1, drawn = 0, reDrawn = 0;
+  const L = 46, RP = 16, TP = 40, BP = 34;
+  const sx = (x) => L + x * (W - L - RP);
+  const sy = (v) => TP + (1 - v / YMAX) * (H - TP - BP);
+  const pathOf = (pts) => pts.map((p, i) => `${i ? "L" : "M"}${sx(p[0]).toFixed(1)} ${sy(p[1]).toFixed(1)}`).join("");
+
+  function build() {
+    if (!box) return;
+    W = box.clientWidth; H = box.clientHeight;
+    if (!W || !H) return;
+    const px = sx(XPEAK), py = sy(PEAK), base = sy(0);
+    const grid = [0, 100, 200, 300, 400, 500].map((v) =>
+      `<path class="ch__grid${v ? "" : " ch__grid--zero"}" d="M${L} ${sy(v).toFixed(1)}H${W - RP}"/><text class="ch__y" x="${L - 12}" y="${sy(v).toFixed(1)}">${v}</text>`).join("");
+    box.innerHTML = `
+      <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">
+        <defs>
+          <linearGradient id="riseGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff8a3d" stop-opacity=".34"/><stop offset="1" stop-color="#ff8a3d" stop-opacity="0"/></linearGradient>
+          <clipPath id="riseClip"><rect class="ch__clip" x="0" y="0" width="0" height="${H}"/></clipPath>
+        </defs>
+        ${grid}
+        <text class="ch__y ch__unit" x="${L - 12}" y="${TP - 22}">ccu</text>
+        <path class="ch__area" d="${pathOf(rise)}L${px.toFixed(1)} ${base.toFixed(1)}L${L} ${base.toFixed(1)}Z" fill="url(#riseGrad)" clip-path="url(#riseClip)"/>
+        <path class="ch__line ch__rise" pathLength="1" d="${pathOf(rise)}"/>
+        <path class="ch__line ch__cliff" pathLength="1" d="M${px.toFixed(1)} ${py.toFixed(1)}V${base.toFixed(1)}"/>
+        <path class="ch__line ch__off" d="M${px.toFixed(1)} ${base.toFixed(1)}H${sx(XRE).toFixed(1)}"/>
+        <path class="ch__line ch__re" pathLength="1" d="${pathOf(re)}"/>
+        <line class="ch__cross" x1="0" x2="0" y1="${TP}" y2="${base.toFixed(1)}"/>
+        <circle class="ch__head" r="4.5"/>
+        <circle class="ch__dot" r="5"/>
+        <g class="ch__peak" transform="translate(${px.toFixed(1)} ${py.toFixed(1)})"><circle class="ch__peak-ring" r="13"/><circle class="ch__peak-dot" r="5.5"/></g>
+        <text class="ch__x" x="${L}" y="${H - 10}" text-anchor="start">launch</text>
+        <text class="ch__x ch__x--down" x="${px.toFixed(1)}" y="${H - 10}" text-anchor="middle">taken down</text>
+        <text class="ch__x ch__x--off" x="${((px + sx(XRE)) / 2).toFixed(1)}" y="${(base - 10).toFixed(1)}" text-anchor="middle">offline</text>
+        <text class="ch__x ch__x--re" x="${sx(XRE).toFixed(1)}" y="${H - 10}" text-anchor="start">reupload</text>
+        <text class="ch__x" x="${W - RP}" y="${H - 10}" text-anchor="end">now</text>
+      </svg>
+      <div class="ch__label mono" style="left:${px.toFixed(1)}px;top:${py.toFixed(1)}px"><b>${PEAK}</b> ccu · peak</div>
+      <div class="ch__tip mono" hidden></div>
+      <div class="ch__note mono">players online · shape reconstructed, peak exact</div>`;
+    els = {
+      rise: $(".ch__rise", box), cliff: $(".ch__cliff", box), off: $(".ch__off", box), re: $(".ch__re", box),
+      area: $(".ch__area", box), clip: $(".ch__clip", box), head: $(".ch__head", box), dot: $(".ch__dot", box), cross: $(".ch__cross", box), tip: $(".ch__tip", box),
+    };
+    riseLen = els.rise.getTotalLength();
+  }
+
+  function update(p) {
+    if (!els) return;
+    drawn = clamp(p / .2);
+    reDrawn = clamp((p - .77) / .18);
+    els.rise.style.strokeDashoffset = 1 - drawn;
+    if (drawn > .002 && drawn < .998) {
+      const pt = els.rise.getPointAtLength(drawn * riseLen);
+      els.head.setAttribute("cx", pt.x.toFixed(1)); els.head.setAttribute("cy", pt.y.toFixed(1));
+      els.head.style.opacity = 1;
+      els.clip.setAttribute("width", pt.x.toFixed(1));
+    } else {
+      els.head.style.opacity = 0;
+      els.clip.setAttribute("width", drawn >= .998 ? W : 0);
+    }
+    els.area.style.opacity = clamp((p - .05) / .15) * (1 - smooth(.5, .56, p) * .7);
+    box.classList.toggle("has-peak", p > .195);
+    els.cliff.style.strokeDashoffset = 1 - clamp((p - .5) / .02);
+    els.off.style.opacity = clamp((p - .52) / .05);
+    els.re.style.strokeDashoffset = 1 - reDrawn;
+    box.classList.toggle("is-down", p > .5);
+    box.classList.toggle("has-re", reDrawn > .05);
+  }
+
+  // crosshair: snaps to the curve, only over the part that's been drawn
+  function hover(e) {
+    if (!els) return;
+    const r = box.getBoundingClientRect();
+    const x = clamp((e.clientX - r.left - L) / (W - L - RP));
+    let v = null, label = "";
+    // the peak already wears its own label: light that up instead of stacking a second one
+    const atPeak = box.classList.contains("has-peak") && Math.abs(x - XPEAK) < .012;
+    box.classList.toggle("is-peak", atPeak);
+    if (atPeak) return leave(true);
+    if (x <= XPEAK && x <= drawn * XPEAK + .002) {
+      const pt = rise[Math.round((x / XPEAK) * 240)];
+      v = pt[1];
+      label = pt[1] === PEAK ? `<b>${PEAK}</b> ccu · the peak` : `≈ <b>${Math.round(v / 10) * 10}</b> ccu`;
+    } else if (x > XPEAK && x < XRE && box.classList.contains("is-down")) {
+      v = 0; label = "<b>0</b> · taken down";
+    } else if (x >= XRE && x <= XRE + reDrawn * (1 - XRE)) {
+      v = re[Math.round(((x - XRE) / (1 - XRE)) * 120)][1]; label = "the reupload";
+    }
+    if (v == null) return leave();
+    const X = sx(x), Y = sy(v);
+    els.cross.setAttribute("x1", X.toFixed(1)); els.cross.setAttribute("x2", X.toFixed(1));
+    els.dot.setAttribute("cx", X.toFixed(1)); els.dot.setAttribute("cy", Y.toFixed(1));
+    els.tip.innerHTML = label;
+    els.tip.style.transform = `translate(${X.toFixed(1)}px, ${Y.toFixed(1)}px)`;
+    els.tip.hidden = false;
+    box.classList.add("is-hover");
+  }
+  function leave(keepPeak) { if (!els) return; els.tip.hidden = true; box.classList.remove("is-hover"); if (keepPeak !== true) box.classList.remove("is-peak"); }
+  box?.addEventListener("pointermove", hover);
+  box?.addEventListener("pointerleave", leave);
+  return { build, update };
+})();
 const track = $("#statsTrack");
 const statCards = $$(".stat", track);
 const hero = { l1: $(".hero__line--1"), l2: $(".hero__line--2"), title: $(".hero__title"), grid: $(".hero__grid") };
@@ -755,11 +990,13 @@ const avatarEls = { stage: $(".avatar__stage"), ring: $(".avatar__ring"), word: 
 const marquee = $("#marquee");
 const labelled = $$("[data-label]");
 
-let docH = 1, trackDist = 0;
+let docH = 1, trackDist = 0, chartW = 0, chartH = 0;
 function layout() {
   trackDist = Math.max(0, track.scrollWidth - innerWidth);
   scenes.stats.style.height = `${trackDist + innerHeight * 1.15}px`;
   docH = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+  const cb = $("#sagaChart");
+  if (cb && (cb.clientWidth !== chartW || cb.clientHeight !== chartH)) { chartW = cb.clientWidth; chartH = cb.clientHeight; chart.build(); }
 }
 addEventListener("resize", layout);
 addEventListener("load", layout);
@@ -784,15 +1021,16 @@ function countUp(el) {
   requestAnimationFrame(step);
 }
 
-const state = { sy: scrollY, vel: 0, intro: 0, introTarget: 0, entered: false, mProg: 0, statsProg: 0, avProg: 0, marq: 0, blood: 0 };
+// snap: set by the show on a hard cut so every eased value lands on the same frame
+const state = { sy: scrollY, vel: 0, intro: 0, introTarget: 0, entered: false, mProg: 0, statsProg: 0, avProg: 0, marq: 0, blood: 0, snap: false };
 const N_STATS = statCards.length;
 setText("statsTotal", String(N_STATS).padStart(2, "0"));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 
-function updateSaga() {
+function updateSaga(k) {
   const el = saga.root, h = el.offsetHeight - innerHeight;
   const raw = (scrollY - el.offsetTop) / h;
-  saga.prog = lerp(saga.prog, clamp(raw), reduced ? 1 : .14);
+  saga.prog = lerp(saga.prog, clamp(raw), k);
   const p = saga.prog;
   const inView = raw > -1 && raw < 1 + innerHeight / h;
 
@@ -807,12 +1045,7 @@ function updateSaga() {
   }
   saga.hud.forEach((s, i) => { s.classList.toggle("on", i === ch); s.style.setProperty("--f", clamp((p - i * .25) / .25)); });
 
-  // chart
-  saga.rise.style.strokeDashoffset = 1 - clamp(p / .2);
-  saga.area.style.opacity = clamp((p - .08) / .14) * (1 - smooth(.5, .56, p));
-  saga.peak.style.opacity = clamp((p - .16) / .05) * (1 - smooth(.5, .54, p) * .7);
-  saga.fall.style.strokeDashoffset = 1 - clamp((p - .5) / .05);
-  saga.re.style.strokeDashoffset = 1 - clamp((p - .77) / .18);
+  chart.update(p);
 
   // the fall: shake, splatter, drips
   const fallen = p > .5;
@@ -825,9 +1058,9 @@ function updateSaga() {
   const after = 1 - .65 * smooth(.76, .92, p);
   $("#splats").style.opacity = after;
   saga.dripsBox.style.opacity = after;
-  const k = clamp((p - .5) / .26);
-  saga.dripsBox.style.setProperty("--drip-top", clamp(k * 3));
-  for (const d of drips) d.el.style.height = `${ease(clamp((k - d.delay) / (1 - d.delay))) * d.max}vh`;
+  const dk = clamp((p - .5) / .26);
+  saga.dripsBox.style.setProperty("--drip-top", clamp(dk * 3));
+  for (const d of drips) d.el.style.height = `${ease(clamp((dk - d.delay) / (1 - d.delay))) * d.max}vh`;
 
   // blood amount, fading out after the scene
   let b = smooth(.47, .56, p) * (1 - .62 * smooth(.76, .92, p));
@@ -836,20 +1069,23 @@ function updateSaga() {
   return b;
 }
 
+let lastNow = performance.now();
 function frame(now) {
+  const dt = clamp((now - lastNow) / 1000, .001, .1);
+  lastNow = now;
+  const show = window.SHOW;
+  show?.preFrame(now, dt);          // song clock + features; the autopilot scrolls here
+  // while the song drives the scroll it is already smooth: follow it tightly so the beat stays on the beat
+  const fast = show?.driving;
+  const follow = (b) => (state.snap || reduced ? 1 : 1 - Math.pow(1 - (fast ? Math.max(b, .3) : b), dt * 60));
   const t = now / 1000;
   const y = scrollY;
   const prevSy = state.sy;
-  state.sy = lerp(state.sy, y, reduced ? 1 : .09);
-  state.vel = lerp(state.vel, (state.sy - prevSy) / 40, .1);
+  state.sy = lerp(state.sy, y, follow(.09));
+  state.vel = state.snap ? 0 : lerp(state.vel, (state.sy - prevSy) / 40, .1);
   state.intro = lerp(state.intro, state.introTarget, .025);
 
-  // cursor
-  cur.x = lerp(cur.x, pointer.x, .5); cur.y = lerp(cur.y, pointer.y, .5);
-  cur.rx = lerp(cur.rx, pointer.x, .16); cur.ry = lerp(cur.ry, pointer.y, .16);
-  dotEl.style.transform = `translate(${cur.x}px, ${cur.y}px)`;
-  const active = cursorEl.classList.contains("is-active");
-  ringEl.style.transform = `translate(${cur.rx}px, ${cur.ry}px) scale(${active ? 2.1 : 1})`;
+  pointerFrame(dt);
 
   // progress
   const pageP = clamp(state.sy / docH);
@@ -867,14 +1103,14 @@ function frame(now) {
 
   // manifesto
   const mp = sceneProgress(scenes.manifesto);
-  state.mProg = lerp(state.mProg, mp, reduced ? 1 : .15);
+  state.mProg = lerp(state.mProg, mp, follow(.15));
   const on = Math.floor(clamp(state.mProg * 1.25) * mWords.length);
   mWords.forEach((w, i) => w.classList.toggle("on", i < on));
   $(".manifesto__arc-line").style.strokeDashoffset = 850 * (1 - clamp(state.mProg * 1.3));
 
   // stats horizontal
   const sp = sceneProgress(scenes.stats);
-  state.statsProg = lerp(state.statsProg, sp, reduced ? 1 : .1);
+  state.statsProg = lerp(state.statsProg, sp, follow(.1));
   track.style.transform = `translate3d(${-state.statsProg * trackDist}px, 0, 0)`;
   $("#statsBar").style.transform = `scaleX(${state.statsProg})`;
   const idx = Math.min(N_STATS, Math.max(1, Math.ceil(state.statsProg * (N_STATS + .2))));
@@ -896,7 +1132,7 @@ function frame(now) {
 
   // avatar
   const ap = sceneProgress(scenes.avatar);
-  state.avProg = lerp(state.avProg, ap, reduced ? 1 : .1);
+  state.avProg = lerp(state.avProg, ap, follow(.1));
   const a = state.avProg;
   if (!reduced) {
     avatarEls.stage.style.transform = `translate3d(0, ${(1 - ease(clamp(a * 2))) * 30}vh, 0) scale(${.7 + ease(clamp(a * 2)) * .35})`;
@@ -908,21 +1144,27 @@ function frame(now) {
   avatarEls.capR.style.opacity = clamp(a * 4 - 1);
   avatarEls.capR.style.transform = `translate3d(0, ${(1 - clamp(a * 4 - 1)) * 40}px, 0)`;
 
-  // marquee
-  state.marq -= (reduced ? 0 : .6) + Math.abs(state.vel) * 6;
+  // marquee: rides the music, stops dead when the music does
+  const F = show?.F;
+  if (!F?.gap) state.marq -= ((reduced ? 0 : .6) + (F?.on ? F.level * 1.4 + F.kick * 3 : 0) + Math.abs(state.vel) * 6) * dt * 60;
   const mw = marquee.scrollWidth / 2;
   if (mw) marquee.style.transform = `translate3d(${state.marq % mw}px, 0, 0)`;
 
   tickSpotify();
 
   // saga + blood theme
-  const blood = updateSaga();
-  state.blood = lerp(state.blood, blood, reduced ? 1 : .08);
+  const blood = updateSaga(follow(.14));
+  state.blood = lerp(state.blood, blood, state.snap || reduced ? 1 : 1 - Math.pow(.92, dt * 60));
   document.documentElement.style.setProperty("--blood", state.blood.toFixed(3));
   document.documentElement.classList.toggle("blood", state.blood > .4);
 
-  if (GL) GL.draw({ time: t, mx: pointer.nx, my: pointer.ny, scroll: pageP, intro: ease(clamp(state.intro)), vel: state.vel, blood: state.blood });
+  show?.postFrame(now, dt);         // meters, deck, drop fx
+  if (GL) {
+    const g = show?.gl();
+    GL.draw({ time: g ? 6 + g.flow : t, mx: pointer.nx, my: pointer.ny, scroll: pageP, intro: ease(clamp(state.intro)), vel: state.vel, blood: state.blood, ...g });
+  }
 
+  state.snap = false;
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
@@ -977,25 +1219,28 @@ let shown = 0;
 (function loader(now) {
   const elapsed = now - bootStart;
   const timeP = clamp(elapsed / 2200);
-  const target = dataReady || elapsed > 7000 ? 1 : Math.min(timeP, .88);
+  // wait for roblox and for enough of the track to play straight through (iOS won't buffer before a tap)
+  const audioOk = !window.SHOW || window.SHOW.ready || elapsed > 6500;
+  const target = (dataReady && audioOk) || elapsed > 9000 ? 1 : Math.min(timeP, .88 + (dataReady ? .06 : 0));
   shown = lerp(shown, target, .08);
   if (target === 1 && shown > .995) shown = 1;
   setText("gateCount", String(Math.round(shown * 100)).padStart(3, "0"));
   $("#gateBar").style.transform = `scaleX(${shown})`;
-  if (!dataReady && elapsed > 1200) setText("gateStatus", "syncing roblox");
+  if (elapsed > 1200) setText("gateStatus", !dataReady ? "syncing roblox" : audioOk ? "ready" : "loading the track");
   if (shown < 1) return requestAnimationFrame(loader);
   setText("gateStatus", "ready");
   gate.classList.add("is-ready");
   state.introTarget = .35;
-  $("#gateEnter").focus({ preventScroll: true });
-  if (enterQueued) setTimeout(enter, 350);
+  if (enterQueued) setTimeout(() => enter(enterQueued === "quiet" ? false : true), 350);
 })(performance.now());
 
 let enterQueued = false;
-function enter() {
+function enter(sound = true) {
   if (state.entered) return;
-  if (!gate.classList.contains("is-ready")) { enterQueued = true; return; }
+  if (sound) window.SHOW?.unlock();   // still inside the tap: wake the audio context now
+  if (!gate.classList.contains("is-ready")) { enterQueued = sound ? true : "quiet"; return; }
   state.entered = true;
+  window.SHOW?.enter(sound);
   state.introTarget = 1;
   gate.classList.add("is-open");
   document.body.classList.remove("is-loading");
@@ -1009,5 +1254,9 @@ function enter() {
   }, 250);
   setTimeout(() => { gate.classList.add("is-gone"); $$("[data-tilt]").forEach((el) => el.classList.add("tilt-live")); layout(); }, 2200);
 }
-gate.addEventListener("click", enter);
-addEventListener("keydown", (e) => { if (!state.entered && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); enter(); } });
+gate.addEventListener("click", (e) => enter(!e.target.closest("#gateQuiet")));
+addEventListener("keydown", (e) => {
+  if (state.entered || (e.key !== "Enter" && e.key !== " ")) return;
+  e.preventDefault();
+  enter(!document.activeElement?.closest?.("#gateQuiet"));
+});
