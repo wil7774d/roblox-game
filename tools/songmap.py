@@ -1,0 +1,139 @@
+"""Map a track for the site's autopilot: tempo grid, sections, silences, drum hits, envelopes.
+
+    python3 tools/songmap.py audio/aloneagain.mp3 audio/song.js
+
+Needs ffmpeg on PATH plus numpy and scipy. The tempo grid, the drop and the sections are
+set by hand below for aloneagain (they were measured from the track: the silence edges at
+7.274 s, 14.546 s and 29.092 s all land exactly on a 132 bpm grid). Swap in a new song →
+re-measure those, then re-run this.
+"""
+import base64
+import json
+import subprocess
+import sys
+
+import numpy as np
+from scipy import signal
+
+SRC, OUT = sys.argv[1], sys.argv[2]
+
+TITLE, ARTIST = "aloneagain", "NIVEK FFORHS"
+BPM = 132.0
+OFFSET = 0.001                # time of bar 0's downbeat, in seconds
+DROP = 29.092                 # the hit: TAKEN DOWN + blood
+SILENCE = [28.654, 29.092]    # the dead air right before it
+SECTIONS = [                  # (id, name, kind, from bar, to bar, energy)
+    ("intro", "intro", "calm", 0, 8, .30),
+    ("verse", "808s", "build", 8, 16, .62),
+    ("drop1", "drop", "drop", 16, 48, 1.0),
+    ("b", "the hook", "flow", 48, 80, .74),
+    ("drop2", "drop ii", "drop", 80, 111, .96),
+    ("cut", "cut", "build", 111, 112, .40),
+    ("drop3", "drop iii", "drop", 112, 144, 1.0),
+    ("outro", "outro", "calm", 144, None, .20),
+]
+
+sr = 22050
+pcm = subprocess.run(["ffmpeg", "-v", "error", "-i", SRC, "-ac", "1", "-ar", str(sr), "-f", "f32le", "-"], check=True, capture_output=True).stdout
+x = np.frombuffer(pcm, dtype=np.float32)
+dur = len(x) / sr
+BAR = 60 / BPM * 4
+
+# --- spectrogram + onsets --------------------------------------------------
+hop, n_fft = 256, 2048
+f, t, Z = signal.stft(x, fs=sr, nperseg=n_fft, noverlap=n_fft - hop, boundary=None, padded=False)
+S = np.abs(Z)
+logS = np.log1p(100 * S)
+
+
+def bandpow(lo, hi):
+    m = (f >= lo) & (f < hi)
+    return np.sqrt((S[m] ** 2).mean(axis=0))
+
+
+def flux(lo, hi):
+    m = (f >= lo) & (f < hi)
+    d = np.diff(logS[m], axis=1)
+    d[d < 0] = 0
+    v = np.concatenate([[0], d.sum(axis=0)])
+    v = v - signal.medfilt(v, 41)
+    v[v < 0] = 0
+    return v / (np.percentile(v, 99.7) + 1e-9)
+
+
+def peaks(v, thr, gap):
+    p, props = signal.find_peaks(v, height=thr, distance=max(1, int(gap / (hop / sr))))
+    # true attacks land ~10 ms after the detecting frame's centre (checked against the
+    # sample-exact drop at 29.092 s and the median kick-to-grid offset)
+    times = t[p] + 0.0095
+    return [(round(float(tt), 3), round(float(min(1.5, h)) / 1.5, 2)) for tt, h in zip(times, props["peak_heights"]) if tt >= 0]
+
+
+kicks = peaks(flux(30, 140), .35, .16)
+snares = peaks(flux(1200, 5000), .40, .14)
+hats = [h[0] for h in peaks(flux(7000, 11000), .30, .07)]
+
+# --- digital silences --------------------------------------------------------
+w = int(.002 * sr)
+loud = np.abs(x)[: len(x) // w * w].reshape(-1, w).max(axis=1) > .01
+gaps, i = [], 0
+while i < len(loud):
+    if loud[i]:
+        i += 1
+        continue
+    j = i
+    while j < len(loud) and not loud[j]:
+        j += 1
+    if (j - i) * w / sr >= .04 and j < len(loud):
+        gaps.append([round(i * w / sr, 3), round(j * w / sr, 3)])
+    i = j
+
+# --- envelopes ---------------------------------------------------------------
+rms = np.sqrt(np.convolve(x ** 2, np.ones(hop) / hop, mode="same"))[::hop]
+
+
+def pool(v, dst_dt, n):
+    """mean-pool v (one value per STFT hop) into n bins of dst_dt seconds"""
+    src_dt, out = hop / sr, np.zeros(n)
+    for k in range(n):
+        a0 = int(k * dst_dt / src_dt)
+        seg = v[a0:max(int((k + 1) * dst_dt / src_dt), a0 + 1)]
+        out[k] = seg.mean() if len(seg) else 0
+    return out
+
+
+def db(v):
+    return 20 * np.log10(np.maximum(v, 1e-9))
+
+
+def u8(v, lo, hi):
+    return np.clip(np.round((v - lo) / (hi - lo) * 255), 0, 255).astype(np.uint8)
+
+
+ENV_DT, FR_DT = .1, 1 / 30
+n_env, n_fr = int(np.ceil(dur / ENV_DT)), int(np.ceil(dur / FR_DT))
+env = u8(db(pool(rms, ENV_DT, n_env)), -36, -2)
+frames = np.stack([
+    u8(db(pool(bandpow(25, 160), FR_DT, n_fr)), -40, -8),
+    u8(db(pool(bandpow(160, 2500), FR_DT, n_fr)), -60, -28),
+    u8(db(pool(bandpow(2500, 11000), FR_DT, n_fr)), -75, -40),
+    u8(db(pool(rms, FR_DT, n_fr)), -36, -2),
+], axis=1).reshape(-1)
+
+bar = lambda n: round(OFFSET + n * BAR, 3)
+b64 = lambda a: base64.b64encode(a.tobytes()).decode()
+song = {
+    "title": TITLE, "artist": ARTIST,
+    "src": "audio/aloneagain.mp3", "cover": "audio/cover.jpg",
+    "duration": round(dur, 3), "bpm": BPM, "offset": OFFSET,
+    "drop": DROP, "silence": SILENCE,
+    "sections": [{"id": i, "name": n, "kind": k, "from": bar(a) if a else 0.0, "to": bar(b) if b is not None else round(dur, 3), "energy": e} for i, n, k, a, b, e in SECTIONS],
+    "gaps": gaps, "kicks": kicks, "snares": snares, "hats": hats,
+    "env": {"dt": ENV_DT, "data": b64(env)},
+    "frames": {"dt": round(FR_DT, 6), "bands": 4, "data": b64(frames)},
+}
+with open(OUT, "w") as fh:
+    fh.write(f"/* song map for {song['src']} — generated by tools/songmap.py from the track itself\n")
+    fh.write(f"   ({BPM:g} bpm grid, sections, silences, drum hits, loudness + 3-band envelopes). */\n")
+    fh.write("window.SONG = " + json.dumps(song, separators=(",", ":")) + ";\n")
+print(f"{OUT}: {len(kicks)} kicks, {len(snares)} snares, {len(hats)} hats, {len(gaps)} silences, {dur:.2f} s")
