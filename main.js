@@ -39,6 +39,49 @@ const fmt = (n) => Math.round(n).toLocaleString("en-US");
 const compact = (n) => new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+const withTimeoutP = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(r, ms))]);
+
+/* --------------------------------------------------------------------------
+   Preload: every asset reports here, and the gate only opens once all of it
+   is in — the track, roblox, every picture, the fonts, the 3d engine and the
+   avatar — so nothing loads (or stutters) mid-show.
+   -------------------------------------------------------------------------- */
+const LOAD = {
+  tasks: new Map(),
+  add(id, weight, label) { this.tasks.set(id, { id, weight, label, p: 0, done: false, note: "" }); },
+  set(id, p, note) { const t = this.tasks.get(id); if (!t || t.done) return; t.p = clamp(p); if (note != null) t.note = note; },
+  done(id, note) { const t = this.tasks.get(id); if (!t || t.done) return; t.p = 1; t.done = true; t.note = note ?? ""; },
+  get progress() { let w = 0, s = 0; for (const t of this.tasks.values()) { w += t.weight; s += t.weight * t.p; } return w ? s / w : 1; },
+  get complete() { for (const t of this.tasks.values()) if (!t.done) return false; return true; },
+  get current() { let best = null; for (const t of this.tasks.values()) if (!t.done && (!best || t.weight * (1 - t.p) > best.weight * (1 - best.p))) best = t; return best; },
+};
+LOAD.add("track", 40, "loading the track");
+LOAD.add("roblox", 12, "syncing roblox");
+LOAD.add("images", 8, "pictures");
+LOAD.add("fonts", 4, "fonts");
+LOAD.add("three", 8, "3d engine");
+LOAD.add("avatar", 20, "building your avatar");
+LOAD.add("warm", 8, "warming up");
+window.LOAD = LOAD;
+
+withTimeoutP(Promise.all([
+  "900 1em 'Inter Tight'", "800 1em 'Inter Tight'", "700 1em 'Inter Tight'", "600 1em 'Inter Tight'", "500 1em 'Inter Tight'", "400 1em 'Inter Tight'",
+  "italic 400 1em 'Instrument Serif'", "500 1em 'JetBrains Mono'", "400 1em 'JetBrains Mono'",
+].map((f) => document.fonts?.load(f).catch(() => {}))), 7000).then(() => LOAD.done("fonts"));
+
+// fetch + decode every picture up front so none of them pops in during the show
+function preloadImages(urls) {
+  const list = [...new Set(urls.filter(Boolean))];
+  if (!list.length) { LOAD.done("images"); return Promise.resolve(); }
+  let n = 0;
+  return Promise.all(list.map((u) => withTimeoutP(new Promise((res) => {
+    const img = new Image();
+    img.decoding = "async";
+    img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(res);
+    img.onerror = res;
+    img.src = u;
+  }), 8000).then(() => LOAD.set("images", ++n / list.length, `${n} / ${list.length}`)))).then(() => LOAD.done("images"));
+}
 
 /* --------------------------------------------------------------------------
    Networking
@@ -223,7 +266,7 @@ function renderBadges(list) {
   if (!list.length) { el.innerHTML = `<p class="empty mono">no public badges to show.</p>`; return; }
   el.innerHTML = list.map((b, i) => `
     <article class="badge card" style="--i:${i % 6}" data-tilt>
-      <div class="badge__img">${b.icon ? `<img src="${esc(b.icon)}" alt="" loading="lazy">` : ""}</div>
+      <div class="badge__img">${b.icon ? `<img src="${esc(b.icon)}" alt="" decoding="async">` : ""}</div>
       <div class="badge__name">${esc(b.name)}</div>
       <div class="badge__game mono">${esc(b.game || "roblox")}</div>
     </article>`).join("");
@@ -234,7 +277,7 @@ function renderBadges(list) {
 
 function renderWearing(list) {
   if (!list.length) return;
-  $("#wearing").innerHTML = list.map((a) => `<a href="https://www.roblox.com/catalog/${a.id}" target="_blank" rel="noopener" data-cursor="view"><img src="${esc(a.icon)}" alt="" loading="lazy"></a>`).join("");
+  $("#wearing").innerHTML = list.map((a) => `<a href="https://www.roblox.com/catalog/${a.id}" target="_blank" rel="noopener" data-cursor="view"><img src="${esc(a.icon)}" alt="" decoding="async"></a>`).join("");
   $("#wearingWrap").hidden = false;
   bindCursor($$("[data-cursor]", $("#wearing")));
   layout();
@@ -268,7 +311,7 @@ function renderCloset() {
       <div class="item__price"><i>R$</i>${fmt(it.price)}</div>
     </article>`).join("");
   observeReveal($$(".item"));
-  const closetIO = new IntersectionObserver(([e]) => { if (e.isIntersecting) { countUp($("#closetTotal")); closetIO.disconnect(); } }, { threshold: .4 });
+  const closetIO = new IntersectionObserver(([e]) => { if (e.isIntersecting && state.entered) { countUp($("#closetTotal")); closetIO.disconnect(); } }, { threshold: .4 });
   closetIO.observe($(".closet__total"));
 }
 
@@ -278,7 +321,7 @@ function renderGroups(list) {
   el.innerHTML = list.slice(0, 10).map((g) => `
     <li class="group" data-reveal>
       <a href="https://www.roblox.com/communities/${g.id}" target="_blank" rel="noopener" data-cursor="open">
-        ${g.icon ? `<img src="${esc(g.icon)}" alt="" loading="lazy">` : `<img alt="">`}
+        ${g.icon ? `<img src="${esc(g.icon)}" alt="" decoding="async">` : `<img alt="">`}
         <span class="group__name">${esc(g.name)}</span>
         <span class="group__role mono">${esc(g.role || "member")}</span>
         <span class="group__members mono">${compact(g.members || 0)} members</span>
@@ -458,7 +501,7 @@ const GL = (() => {
   float fbm(vec2 p){
     float v = 0., a = .5;
     mat2 r = mat2(.8,.6,-.6,.8);
-    for(int i=0;i<5;i++){ v += a*noise(p); p = r*p*2.02 + 3.1; a *= .5; }
+    for(int i=0;i<4;i++){ v += a*noise(p); p = r*p*2.02 + 3.1; a *= .5; }
     return v;
   }
   mat2 rot(float a){ float c=cos(a), s=sin(a); return mat2(c,-s,s,c); }
@@ -586,8 +629,11 @@ const GL = (() => {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   gl.uniform1i(U.uSpec, 0);
 
+  // smoke is soft by nature: it renders below screen resolution, and lower still if frames run long
+  let quality = 2;
   function resize() {
-    const dpr = Math.min(devicePixelRatio || 1, 1.5) * (innerWidth < 760 ? .7 : .85);
+    const scale = [.42, .58, innerWidth < 760 ? .66 : .78][quality];
+    const dpr = Math.min(devicePixelRatio || 1, 1.5) * scale;
     canvas.width = Math.round(innerWidth * dpr);
     canvas.height = Math.round(innerHeight * dpr);
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -596,6 +642,7 @@ const GL = (() => {
   addEventListener("resize", resize);
 
   return {
+    setQuality(q) { quality = q; resize(); },
     draw({ time, mx, my, scroll, intro, vel, blood, spec, kick = 0, level = 0, tension = 0, drop = 0, shock = 9, rewind = 0, audio = 0, dark = 0 }) {
       gl.uniform2f(U.uRes, canvas.width, canvas.height);
       gl.uniform1f(U.uTime, time);
@@ -788,7 +835,7 @@ function pointerFrame(dt) {
 
 const toast = $("#toast");
 let toastT;
-function say(msg) { toast.textContent = msg; toast.classList.add("is-on"); clearTimeout(toastT); toastT = setTimeout(() => toast.classList.remove("is-on"), 2200); }
+function say(msg, ms = 2400) { toast.textContent = msg; toast.classList.add("is-on"); clearTimeout(toastT); toastT = setTimeout(() => toast.classList.remove("is-on"), ms); }
 $$("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
   const v = b.dataset.copy;
   try { await navigator.clipboard.writeText(v); }
@@ -981,22 +1028,93 @@ const chart = (() => {
   function leave(keepPeak) { if (!els) return; els.tip.hidden = true; box.classList.remove("is-hover"); if (keepPeak !== true) box.classList.remove("is-peak"); }
   box?.addEventListener("pointermove", hover);
   box?.addEventListener("pointerleave", leave);
-  return { build, update };
+  // where the line is being drawn right now, and the peak — in viewport pixels (the 3d avatar rides them)
+  const centreOf = (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+  const headPoint = () => (els && drawn > .002 && drawn < .998 ? centreOf(els.head) : els && drawn >= .998 ? peakPoint() : null);
+  const peakPoint = () => (els ? centreOf($(".ch__peak-dot", box)) : null);
+  return { build, update, headPoint, peakPoint };
 })();
 const track = $("#statsTrack");
 const statCards = $$(".stat", track);
 const hero = { l1: $(".hero__line--1"), l2: $(".hero__line--2"), title: $(".hero__title"), grid: $(".hero__grid") };
 const avatarEls = { stage: $(".avatar__stage"), ring: $(".avatar__ring"), word: $(".avatar__bgword"), capL: $(".avatar__cap--l"), capR: $(".avatar__cap--r") };
 const marquee = $("#marquee");
+const bloodwash = $(".bloodwash");
 const labelled = $$("[data-label]");
 
+/* --------------------------------------------------------------------------
+   View: the whole page is one fixed layer moved by a GPU transform, so motion
+   is sub-pixel smooth and never fights the browser's own scrolling.
+   • autopilot owns it: the show sets view.target every frame (a smooth spline
+     through the song) and a stiff spring follows it; native scroll is locked.
+   • by hand: native scroll sets the target and the view eases after it.
+   Pinned ("sticky") scenes are pinned with transforms too.
+   -------------------------------------------------------------------------- */
+const mainEl = $("main");
+const spacer = document.createElement("div");
+spacer.className = "spacer";
+spacer.setAttribute("aria-hidden", "true");
+document.body.insertBefore(spacer, mainEl);
+document.documentElement.classList.add("vscroll");
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+
+const view = {
+  y: 0, v: 0, target: 0, max: 0, auto: false, layoutV: 0,
+  cam: { x: 0, y: 0, s: 1, r: 0 },              // camera offsets from the show: shake, push-in
+  lock(on) {
+    if (on === this.auto) return;
+    this.auto = on;
+    document.documentElement.classList.toggle("is-locked", on);
+    if (!on) { scrollTo(0, this.y); this.target = this.y; this.v = 0; }
+  },
+  jump(y) { this.target = this.y = clamp(y, 0, this.max); this.v = 0; },
+};
+const pins = $$(".scene").map((el) => ({ el, sticky: $(".sticky", el), top: 0, h: 0, off: -1 }));
+
+// document position of anything inside main, transforms ignored
+function docTop(el) { let y = 0; while (el && el !== mainEl) { y += el.offsetTop; el = el.offsetParent; } return y; }
+
+function viewFrame(dt) {
+  if (view.auto) {
+    if (state.snap) { view.y = view.target; view.v = 0; }
+    else {
+      // critically damped spring: absorbs any seam in the path without lagging the music
+      const w = 30, n = Math.max(1, Math.ceil(dt / (1 / 240))), h = dt / n;
+      for (let i = 0; i < n; i++) { view.v += (w * w * (view.target - view.y) - 2 * w * view.v) * h; view.y += view.v * h; }
+    }
+  } else if (view.pre) {
+    view.v = 0;
+  } else {
+    view.target = scrollY;
+    view.y = Math.abs(view.target - view.y) < .05 ? view.target : lerp(view.y, view.target, reduced ? 1 : 1 - Math.pow(.86, dt * 60));
+    view.v = 0;
+  }
+  view.y = clamp(view.y, 0, view.max);
+  const c = view.cam, y = view.y;
+  if (c.s !== 1 || c.r !== 0) {
+    mainEl.style.transformOrigin = `50% ${(y + innerHeight / 2).toFixed(1)}px`;
+    mainEl.style.transform = `translate3d(${c.x.toFixed(2)}px, ${(c.y - y).toFixed(2)}px, 0) scale(${c.s.toFixed(4)}) rotate(${c.r.toFixed(3)}deg)`;
+  } else mainEl.style.transform = `translate3d(${c.x.toFixed(2)}px, ${(c.y - y).toFixed(2)}px, 0)`;
+  for (const p of pins) {
+    const off = clamp(y - p.top, 0, Math.max(0, p.h - innerHeight));
+    if (Math.abs(off - p.off) > .01) { p.off = off; p.sticky.style.transform = `translate3d(0, ${off.toFixed(2)}px, 0)`; }
+  }
+}
+
 let docH = 1, trackDist = 0, chartW = 0, chartH = 0;
+const cardGeo = [];
 function layout() {
   trackDist = Math.max(0, track.scrollWidth - innerWidth);
   scenes.stats.style.height = `${trackDist + innerHeight * 1.15}px`;
-  docH = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+  const H = mainEl.offsetHeight;
+  spacer.style.height = `${H}px`;
+  docH = view.max = Math.max(1, H - innerHeight);
+  for (const p of pins) { p.top = p.el.offsetTop; p.h = p.el.offsetHeight; p.off = -1; }
+  cardGeo.length = 0;
+  for (const c of statCards) cardGeo.push({ c, x: c.offsetLeft + track.offsetLeft, w: c.offsetWidth });
   const cb = $("#sagaChart");
   if (cb && (cb.clientWidth !== chartW || cb.clientHeight !== chartH)) { chartW = cb.clientWidth; chartH = cb.clientHeight; chart.build(); }
+  view.layoutV++;
 }
 addEventListener("resize", layout);
 addEventListener("load", layout);
@@ -1005,11 +1123,18 @@ layout();
 
 function sceneProgress(el) {
   const top = el.offsetTop, h = el.offsetHeight - innerHeight;
-  return h > 0 ? clamp((scrollY - top) / h) : 0;
+  return h > 0 ? clamp((view.y - top) / h) : 0;
 }
 
+// keyboard users by hand: bring whatever gets focus into view
+document.addEventListener("focusin", (e) => {
+  if (view.auto || !mainEl.contains(e.target)) return;
+  const r = e.target.getBoundingClientRect();
+  if (r.top < 70 || r.bottom > innerHeight - 40) scrollTo(0, clamp(r.top + view.y - innerHeight * .35, 0, view.max));
+});
+
 function countUp(el) {
-  if (el.dataset.done || el.dataset.to === undefined || el.dataset.to === "") return;
+  if (!state.entered || el.dataset.done || el.dataset.to === undefined || el.dataset.to === "") return;
   el.dataset.done = "1";
   const to = +el.dataset.to, start = performance.now(), dur = reduced ? 1 : 1800;
   const big = (el.id === "sVisits" || el.id === "sLifetime" || el.hasAttribute("data-compact")) && to >= 1e5;
@@ -1022,14 +1147,14 @@ function countUp(el) {
 }
 
 // snap: set by the show on a hard cut so every eased value lands on the same frame
-const state = { sy: scrollY, vel: 0, intro: 0, introTarget: 0, entered: false, mProg: 0, statsProg: 0, avProg: 0, marq: 0, blood: 0, snap: false };
+const state = { sy: 0, vel: 0, intro: 0, introTarget: 0, entered: false, mProg: 0, statsProg: 0, avProg: 0, marq: 0, blood: 0, snap: false };
 const N_STATS = statCards.length;
 setText("statsTotal", String(N_STATS).padStart(2, "0"));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 
 function updateSaga(k) {
   const el = saga.root, h = el.offsetHeight - innerHeight;
-  const raw = (scrollY - el.offsetTop) / h;
+  const raw = (view.y - el.offsetTop) / h;
   saga.prog = lerp(saga.prog, clamp(raw), k);
   const p = saga.prog;
   const inView = raw > -1 && raw < 1 + innerHeight / h;
@@ -1064,24 +1189,24 @@ function updateSaga(k) {
 
   // blood amount, fading out after the scene
   let b = smooth(.47, .56, p) * (1 - .62 * smooth(.76, .92, p));
-  b *= 1 - clamp((scrollY - (el.offsetTop + h)) / (innerHeight * .7));
+  b *= 1 - clamp((view.y - (el.offsetTop + h)) / (innerHeight * .7));
   if (raw < 0) b = 0;
   return b;
 }
 
 let lastNow = performance.now();
+const perf = { ema: 16.7, tier: 2, since: 0 };   // adaptive quality: 2 full, 1 lighter, 0 lightest
 function frame(now) {
   const dt = clamp((now - lastNow) / 1000, .001, .1);
   lastNow = now;
   const show = window.SHOW;
-  show?.preFrame(now, dt);          // song clock + features; the autopilot scrolls here
-  // while the song drives the scroll it is already smooth: follow it tightly so the beat stays on the beat
-  const fast = show?.driving;
-  const follow = (b) => (state.snap || reduced ? 1 : 1 - Math.pow(1 - (fast ? Math.max(b, .3) : b), dt * 60));
+  show?.preFrame(now, dt);          // song clock + features; autopilot sets view.target here
+  viewFrame(dt);
+  // the view is already smooth: everything that follows it can follow tightly
+  const follow = (b) => (state.snap || reduced ? 1 : 1 - Math.pow(1 - Math.max(b, .35), dt * 60));
   const t = now / 1000;
-  const y = scrollY;
   const prevSy = state.sy;
-  state.sy = lerp(state.sy, y, follow(.09));
+  state.sy = view.y;
   state.vel = state.snap ? 0 : lerp(state.vel, (state.sy - prevSy) / 40, .1);
   state.intro = lerp(state.intro, state.introTarget, .025);
 
@@ -1093,7 +1218,7 @@ function frame(now) {
 
   // hero parallax
   const hp = clamp(state.sy / innerHeight);
-  if (!reduced) {
+  if (!reduced && hp < 1.05) {
     hero.l1.style.transform = `translate3d(${-hp * 22}vw, ${hp * 8}vh, 0)`;
     hero.l2.style.transform = `translate3d(${hp * 22}vw, ${hp * 4}vh, 0)`;
     hero.title.style.opacity = 1 - hp * 1.1;
@@ -1105,27 +1230,29 @@ function frame(now) {
   const mp = sceneProgress(scenes.manifesto);
   state.mProg = lerp(state.mProg, mp, follow(.15));
   const on = Math.floor(clamp(state.mProg * 1.25) * mWords.length);
-  mWords.forEach((w, i) => w.classList.toggle("on", i < on));
+  if (on !== state.mOn) { state.mOn = on; mWords.forEach((w, i) => w.classList.toggle("on", i < on)); }
   $(".manifesto__arc-line").style.strokeDashoffset = 850 * (1 - clamp(state.mProg * 1.3));
 
-  // stats horizontal
+  // stats horizontal — card positions come from cached geometry, never from layout reads
   const sp = sceneProgress(scenes.stats);
   state.statsProg = lerp(state.statsProg, sp, follow(.1));
-  track.style.transform = `translate3d(${-state.statsProg * trackDist}px, 0, 0)`;
+  const tx = -state.statsProg * trackDist;
+  track.style.transform = `translate3d(${tx.toFixed(2)}px, 0, 0)`;
   $("#statsBar").style.transform = `scaleX(${state.statsProg})`;
   const idx = Math.min(N_STATS, Math.max(1, Math.ceil(state.statsProg * (N_STATS + .2))));
-  $("#statsIdx").textContent = String(idx).padStart(2, "0");
-  if (scrollY > scenes.stats.offsetTop - innerHeight) {
-    for (const c of statCards) {
-      const r = c.getBoundingClientRect();
-      if (r.left < innerWidth * .92 && r.right > 0) {
-        countUp($("[data-num]", c));
-        const bar = $(".stat__bar span", c);
-        if (bar && bar.dataset.to && !bar.dataset.done) { bar.dataset.done = 1; bar.style.transform = `scaleX(${bar.dataset.to})`; }
+  setText("statsIdx", String(idx).padStart(2, "0"));
+  const st = pins.find((p) => p.el === scenes.stats);
+  if (st && view.y > st.top - innerHeight && view.y < st.top + st.h) {
+    for (const g of cardGeo) {
+      const left = g.x + tx, right = left + g.w;
+      if (left < innerWidth * .92 && right > 0) {
+        countUp($("[data-num]", g.c));
+        const bar = $(".stat__bar span", g.c);
+        if (bar && bar.dataset.to && !bar.dataset.done && state.entered) { bar.dataset.done = 1; bar.style.transform = `scaleX(${bar.dataset.to})`; }
       }
-      if (!reduced) {
-        const center = (r.left + r.width / 2) / innerWidth - .5;
-        c.style.transform = `perspective(1200px) rotateY(${center * -14}deg) translateY(${Math.abs(center) * 40}px)`;
+      if (!reduced && right > -200 && left < innerWidth + 200) {
+        const center = (left + g.w / 2) / innerWidth - .5;
+        g.c.style.transform = `perspective(1200px) rotateY(${(center * -14).toFixed(2)}deg) translateY(${(Math.abs(center) * 40).toFixed(1)}px)`;
       }
     }
   }
@@ -1148,20 +1275,32 @@ function frame(now) {
   const F = show?.F;
   if (!F?.gap) state.marq -= ((reduced ? 0 : .6) + (F?.on ? F.level * 1.4 + F.kick * 3 : 0) + Math.abs(state.vel) * 6) * dt * 60;
   const mw = marquee.scrollWidth / 2;
-  if (mw) marquee.style.transform = `translate3d(${state.marq % mw}px, 0, 0)`;
+  if (mw) marquee.style.transform = `translate3d(${(state.marq % mw).toFixed(2)}px, 0, 0)`;
 
   tickSpotify();
 
-  // saga + blood theme
+  // saga + blood theme (the wash reads --blood from its own element: no page-wide restyle)
   const blood = updateSaga(follow(.14));
   state.blood = lerp(state.blood, blood, state.snap || reduced ? 1 : 1 - Math.pow(.92, dt * 60));
-  document.documentElement.style.setProperty("--blood", state.blood.toFixed(3));
+  const bv = state.blood.toFixed(3);
+  if (bv !== state.bv) { state.bv = bv; bloodwash.style.setProperty("--blood", bv); }
   document.documentElement.classList.toggle("blood", state.blood > .4);
 
   show?.postFrame(now, dt);         // meters, deck, drop fx
   if (GL) {
     const g = show?.gl();
     GL.draw({ time: g ? 6 + g.flow : t, mx: pointer.nx, my: pointer.ny, scroll: pageP, intro: ease(clamp(state.intro)), vel: state.vel, blood: state.blood, ...g });
+  }
+  window.STAGE3D?.frame(now, dt);   // the 3d world renders last, on top
+
+  // adaptive quality: if frames run long for a while, step down (never back up mid-show)
+  perf.ema = lerp(perf.ema, dt * 1000, .05);
+  perf.since += dt;
+  if (state.entered && perf.ema > 24 && perf.since > 2.5 && perf.tier > 0) {
+    perf.tier--; perf.since = 0;
+    document.documentElement.dataset.tier = perf.tier;
+    GL?.setQuality?.(perf.tier);
+    window.STAGE3D?.setQuality?.(perf.tier);
   }
 
   state.snap = false;
@@ -1191,47 +1330,84 @@ function tickClock() {
 setInterval(tickClock, 1000); tickClock();
 setText("year", new Date().getFullYear());
 
-// anchor links — smooth glide
+// anchor links: with autopilot on they jump the show to that part of the song; by hand they glide
 $$('a[href^="#"]').forEach((a) => a.addEventListener("click", (e) => {
-  const target = a.getAttribute("href") === "#top" ? document.body : $(a.getAttribute("href"));
-  if (!target) return;
+  const id = a.getAttribute("href");
   e.preventDefault();
-  const top = target === document.body ? 0 : target.getBoundingClientRect().top + scrollY;
-  scrollTo({ top, behavior: reduced ? "auto" : "smooth" });
+  if (window.SHOW?.goto(id)) return;
+  const el = id === "#top" ? null : $(id);
+  if (id !== "#top" && !el) return;
+  scrollTo({ top: el ? clamp(docTop(el), 0, view.max) : 0, behavior: reduced ? "auto" : "smooth" });
 }));
 
 /* --------------------------------------------------------------------------
-   Boot: loader → gate → enter
+   Boot: preload everything → gate → enter
    -------------------------------------------------------------------------- */
 const gate = $("#gate");
-let dataReady = false;
 const bootStart = performance.now();
+const EMPTY = { user: null, friends: null, followers: null, following: null, headshot: null, avatar: null, badgeCount: 0, badgesCapped: false, recentBadges: [], groups: [], games: [], names: [], wearing: [] };
+const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
 
+LOAD.set("roblox", .15);
 const dataPromise = fetchRoblox()
-  .then((d) => { renderRoblox(d); setText("updated", `synced ${new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }).toLowerCase()}`); })
-  .catch((e) => { console.warn(e); renderRoblox({ user: null, friends: null, followers: null, following: null, headshot: null, avatar: null, badgeCount: 0, badgesCapped: false, recentBadges: [], groups: [], games: [], names: [] }); })
-  .finally(() => { dataReady = true; layout(); });
+  .then((d) => { renderRoblox(d); setText("updated", `synced ${new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }).toLowerCase()}`); return d; })
+  .catch((e) => { console.warn(e); renderRoblox(EMPTY); return EMPTY; })
+  .then((d) => {
+    LOAD.done("roblox", d.user ? "" : "offline");
+    layout();
+    return preloadImages([d.headshot, d.avatar, ...d.recentBadges.map((b) => b.icon), ...d.groups.map((g) => g.icon), ...(d.wearing || []).map((w) => w.icon), "audio/cover.jpg"]).then(() => d);
+  });
+
+// warm-up: run the camera through every section once behind the gate, so the browser has laid out,
+// rasterised and decoded all of it before the show needs it
+async function warmUp() {
+  await withTimeoutP(dataPromise, 20000);
+  await withTimeoutP(document.fonts?.ready ?? Promise.resolve(), 6000);
+  layout();
+  const stops = [0];
+  for (const p of pins) stops.push(p.top, p.top + (p.h - innerHeight) * .5, p.top + Math.max(0, p.h - innerHeight));
+  for (const el of $$("main > section:not(.scene), main > footer")) stops.push(docTop(el), docTop(el) + el.offsetHeight * .5);
+  stops.push(view.max);
+  view.pre = true;
+  for (let i = 0; i < stops.length; i++) {
+    view.jump(stops[i]);
+    await nextFrame();
+    LOAD.set("warm", (i + 1) / stops.length);
+  }
+  view.jump(0);
+  view.pre = false;
+  await nextFrame();
+  LOAD.done("warm");
+}
+warmUp();
+
+// if the 3d module can't load (old browser, blocked file) the gate must not wait on it
+const s3d = document.querySelector('script[src="stage3d.js"]');
+const no3d = () => { if (!window.STAGE3D) { LOAD.done("three", "off"); LOAD.done("avatar", "2d"); } };
+s3d?.addEventListener("error", no3d);
+setTimeout(no3d, 20000);
 
 loadDiscord();
 setInterval(loadDiscord, 30000);
 
-let shown = 0;
+let shown = 0, lastList = "";
 (function loader(now) {
   const elapsed = now - bootStart;
-  const timeP = clamp(elapsed / 2200);
-  // wait for roblox and for enough of the track to play straight through (iOS won't buffer before a tap)
-  const audioOk = !window.SHOW || window.SHOW.ready || elapsed > 6500;
-  const target = (dataReady && audioOk) || elapsed > 9000 ? 1 : Math.min(timeP, .88 + (dataReady ? .06 : 0));
-  shown = lerp(shown, target, .08);
-  if (target === 1 && shown > .995) shown = 1;
-  setText("gateCount", String(Math.round(shown * 100)).padStart(3, "0"));
+  const done = (LOAD.complete && elapsed > 900) || elapsed > 30000;
+  const target = done ? 1 : Math.min(LOAD.progress, .99);
+  shown += (target - shown) * .12;
+  if (done && shown > .995) shown = 1;
+  setText("gateCount", String(Math.floor(shown * 100)).padStart(3, "0"));
   $("#gateBar").style.transform = `scaleX(${shown})`;
-  if (elapsed > 1200) setText("gateStatus", !dataReady ? "syncing roblox" : audioOk ? "ready" : "loading the track");
+  const cur = LOAD.current;
+  setText("gateStatus", done || !cur ? "ready" : `${cur.label}${cur.note ? ` · ${cur.note}` : ""}`);
+  const list = [...LOAD.tasks.values()].map((t) => `<span class="${t.done ? "ok" : ""}">${t.id} ${t.done ? "✓" : `${Math.round(t.p * 100)}%`}</span>`).join("");
+  if (list !== lastList) { lastList = list; $("#gateList").innerHTML = list; }
   if (shown < 1) return requestAnimationFrame(loader);
   setText("gateStatus", "ready");
   gate.classList.add("is-ready");
   state.introTarget = .35;
-  if (enterQueued) setTimeout(() => enter(enterQueued === "quiet" ? false : true), 350);
+  if (enterQueued) setTimeout(() => enter(enterQueued === "quiet" ? false : true), 200);
 })(performance.now());
 
 let enterQueued = false;
@@ -1240,19 +1416,20 @@ function enter(sound = true) {
   if (sound) window.SHOW?.unlock();   // still inside the tap: wake the audio context now
   if (!gate.classList.contains("is-ready")) { enterQueued = sound ? true : "quiet"; return; }
   state.entered = true;
+  view.jump(0);
   window.SHOW?.enter(sound);
+  window.STAGE3D?.enter?.(sound);
   state.introTarget = 1;
   gate.classList.add("is-open");
   document.body.classList.remove("is-loading");
   document.documentElement.classList.add("is-entered");
   document.body.classList.add("is-entered");
-  scrollTo(0, 0);
   setTimeout(() => {
     $$(".hero [data-split], .hero [data-reveal]").forEach((el) => el.classList.add("is-in"));
     observeReveal($$("[data-split]:not(.hero [data-split]), [data-reveal]:not(.hero [data-reveal])"));
     $$(".scr").forEach((e) => scrIO.observe(e));
-  }, 250);
-  setTimeout(() => { gate.classList.add("is-gone"); $$("[data-tilt]").forEach((el) => el.classList.add("tilt-live")); layout(); }, 2200);
+  }, 120);
+  setTimeout(() => { gate.classList.add("is-gone"); $$("[data-tilt]").forEach((el) => el.classList.add("tilt-live")); layout(); }, 1400);
 }
 gate.addEventListener("click", (e) => enter(!e.target.closest("#gateQuiet")));
 addEventListener("keydown", (e) => {
@@ -1260,3 +1437,6 @@ addEventListener("keydown", (e) => {
   e.preventDefault();
   enter(!document.activeElement?.closest?.("#gateQuiet"));
 });
+
+// what the show and the 3d world need from the site
+window.SITE = { CONFIG, rbx, view, scenes, pins, docTop, say, state, saga, chart, data: dataPromise, layout };

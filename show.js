@@ -38,7 +38,6 @@
     freq: null, wave: null,
     init() {
       const el = this.el;
-      el.src = SONG.src;
       el.preload = "auto";
       el.setAttribute("playsinline", "");
       el.addEventListener("canplaythrough", () => (this.ready = true));
@@ -48,7 +47,34 @@
       el.addEventListener("seeked", () => clock.sync());
       el.addEventListener("ended", () => { this.playing = false; this.ended = true; onEnded(); });
       el.addEventListener("error", () => { this.failed = true; this.ready = true; });
+      this.preload();
+    },
+    // the whole track is downloaded before the gate opens (with real progress), then played from
+    // memory: no buffering mid-show, instant seeks. From disk (file://) it streams instead.
+    async preload() {
+      const el = this.el, L = window.LOAD;
+      const mb = (n) => (n / 1048576).toFixed(1);
+      let src = SONG.src;
+      if (/^https?:$/.test(location.protocol) && window.fetch && window.ReadableStream) {
+        try {
+          const res = await fetch(SONG.src);
+          if (!res.ok || !res.body) throw new Error(res.status);
+          const total = +res.headers.get("content-length") || 0;
+          const reader = res.body.getReader(), chunks = [];
+          let got = 0;
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value); got += value.length;
+            L?.set("track", total ? got / total * .97 : Math.min(.95, got / 7e6), total ? `${mb(got)} / ${mb(total)} mb` : `${mb(got)} mb`);
+          }
+          src = URL.createObjectURL(new Blob(chunks, { type: "audio/mpeg" }));
+        } catch (e) { console.warn("track preload", e); }
+      }
+      el.src = src;
       el.load();
+      await new Promise((res) => { if (this.ready) return res(); el.addEventListener("canplaythrough", res, { once: true }); el.addEventListener("error", res, { once: true }); setTimeout(res, 9000); });
+      L?.done("track", this.failed ? "unavailable" : "");
     },
     wire() {
       if (this.ctx || !/^https?:$/.test(location.protocol)) return;
@@ -207,6 +233,7 @@
         for (const fn of listeners.beat) fn(bn);
       }
       for (let i = 0; i < DROPS.length; i++) if (prev < DROPS[i] && t >= DROPS[i]) onDrop(i);
+      cueCrossings(prev, t);
     }
     const g = (t - SONG.offset) / BEAT;
     F.frac = g - Math.floor(g);
@@ -225,153 +252,173 @@
   }
 
   /* ------------------------------------------------------------------------
-     Director: where the page should be at every moment of the song
+     Director: where the page should be at every moment of the song.
+     Nodes are (song time → page position). Between cuts they're joined by a
+     monotone cubic spline: velocity is continuous through every node, it never
+     overshoots or runs backwards, and equal neighbours make a clean hold. A cut
+     starts a new run and the view jumps on that downbeat.
      ------------------------------------------------------------------------ */
+  const V = window.SITE.view;
   const P = {
     top: () => 0,
     scene: (name, p) => () => { const el = scenes[name]; return el.offsetTop + p * Math.max(0, el.offsetHeight - innerHeight); },
-    at: (sel, vh = 0) => () => { const el = $(sel); return el ? Math.max(0, el.offsetTop + vh * innerHeight) : 0; },
-    bottom: (sel) => () => { const el = $(sel); return el ? Math.max(0, el.offsetTop + el.offsetHeight - innerHeight) : 0; },
-    end: () => Math.max(0, document.documentElement.scrollHeight - innerHeight),
+    at: (sel, vh = 0) => () => { const el = $(sel); return el ? Math.max(0, window.SITE.docTop(el) + vh * innerHeight) : 0; },
+    bottom: (sel) => () => { const el = $(sel); return el ? Math.max(0, window.SITE.docTop(el) + el.offsetHeight - innerHeight) : 0; },
+    end: () => V.max,
   };
-
-  // m: how to travel from this key to the next one (or to `to`); cut: jump here on the downbeat
-  const recap = (n, a, b, extra) => ({ t: T(n), y: a, to: b, m: "lin", cut: true, ...extra });
-  const KEYS = [
-    { t: 0, y: P.top, m: "hold" },
-    { t: T(2), y: P.top, m: "ease" },                                        // the hero lifts away
-    { t: T(4), y: P.scene("manifesto", 0), m: "beats" },                     // a word per beat
-    { t: T(8), y: P.scene("manifesto", .9), m: "out", fx: "808" },
-    { t: T(8) + BEAT, y: P.scene("stats", 0), m: "beats" },                  // a card per beat
-    { t: T(12), y: P.scene("stats", 1), m: "out" },
-    { t: T(12) + BEAT, y: P.scene("saga", .01), m: "beats" },                // i · the rise
-    { t: T(14), y: P.scene("saga", .22), m: "out" },
-    { t: T(14) + BEAT, y: P.scene("saga", .27), m: "in" },                   // ii · the sign, accelerating
-    { t: SONG.silence[0], y: P.scene("saga", .47), m: "hold" },               // silence
-    { t: SONG.drop, y: P.scene("saga", .535), m: "ease", cut: true },        // THE DROP
-    { t: T(24), y: P.scene("saga", .72), m: "ease" },                        // iv · reupload
-    { t: T(28), y: P.scene("saga", .99), m: "out" },
-    { t: T(28) + 2 * BEAT, y: P.scene("avatar", .04), m: "beats" },
-    { t: T(36), y: P.scene("avatar", 1), m: "out" },
-    { t: T(36) + 2 * BEAT, y: P.at("#closet"), m: "bars" },
-    { t: T(48), y: P.bottom("#closet"), m: "ease" },                         // the hook
-    { t: T(48) + BAR, y: P.at(".insights"), m: "ease" },
-    { t: T(64), y: P.bottom(".insights"), m: "ease" },
-    { t: T(64) + BAR, y: P.at("#vault"), to: P.bottom("#vault"), m: "ease" },
-    { t: T(80), y: P.at("#stage"), m: "hold", cut: true },                   // drop ii · now playing
-    { t: T(104), y: P.at("#stage"), m: "ease" },
-    { t: T(104) + BAR, y: P.at("#discord"), m: "hold" },                     // say hi.
-    { t: T(111), y: P.at("#discord"), m: "rewind", fx: "rewind" },           // bass cut → rewind
-    { t: T(112), y: P.top, m: "hold", fx: "slam" },                          // drop iii
-    recap(116, P.scene("manifesto", .78), P.scene("manifesto", .96)),
-    recap(118, P.scene("stats", .28), P.scene("stats", .44)),
-    recap(120, P.scene("stats", .74), P.scene("stats", .9)),
-    recap(122, P.scene("saga", .06), P.scene("saga", .2)),
-    recap(124, P.scene("saga", .535), P.scene("saga", .62), { fx: "bleed" }),
-    recap(126, P.scene("saga", .8), P.scene("saga", .92)),
-    recap(128, P.scene("avatar", .42), P.scene("avatar", .72)),
-    recap(130, P.at("#closet", .05), P.at("#closet", .45)),
-    recap(132, P.at(".insights", .3), P.at(".insights", .7)),
-    recap(134, P.at("#vault", .05), P.at("#vault", .35)),
-    recap(136, P.at(".vault__head--groups", -.2), P.at(".vault__head--groups", .1)),
-    recap(138, P.at("#stage"), P.at("#stage")),
-    { t: T(140), y: P.at("#discord"), m: "hold", cut: true },
-    { t: T(144), y: P.at("#discord"), m: "ease", fx: "outro" },               // outro
-    { t: SONG.duration, y: P.end, m: "hold" },
+  const N = (t, y) => ({ t, y }), C = (t, y) => ({ t, y, cut: true });
+  const S = P.scene;
+  const NODES = [
+    N(0, P.top), N(T(3), P.top),                                          // hero: the avatar spawns + poses on the stutters
+    N(T(4), S("manifesto", 0)), N(T(8) - .45, S("manifesto", .94)),     // the manifesto, word by word
+    N(T(8) + .5, S("stats", 0)), N(T(12) - .25, S("stats", 1)),        // 808s: the stats fly
+    N(T(12) + .4, S("saga", .015)), N(T(14), S("saga", .23)),          // i · the rise
+    N(T(15), S("saga", .3)), N(SONG.silence[0], S("saga", .47)),        // ii · the sign, gathering speed
+    N(SONG.drop - .001, S("saga", .47)),                                 // dead air
+    C(SONG.drop, S("saga", .535)), N(T(23.5), S("saga", .72)),          // THE DROP
+    N(T(28) - .2, S("saga", .985)), N(T(28) + .6, S("avatar", .05)),   // iv · reupload → the fit
+    N(T(36) - .3, S("avatar", .97)), N(T(36) + .6, P.at("#closet")),
+    N(T(48), P.bottom("#closet")), N(T(49), P.at(".insights")),        // the hook
+    N(T(64), P.bottom(".insights")), N(T(65), P.at("#vault")),
+    N(T(80) - .05, P.bottom("#vault")),
+    C(T(80), P.at("#stage")), N(T(104), P.at("#stage")),               // drop ii · now playing
+    N(T(105), P.at("#discord")), N(T(111), P.at("#discord")),          // say hi.
+    N(T(112) - .02, P.top), N(T(116) - .001, P.top),                    // bass cut → rewind → drop iii
+    C(T(116), S("manifesto", .78)), N(T(118) - .001, S("manifesto", .96)),   // the recap: a cut every 2 bars
+    C(T(118), S("stats", .28)), N(T(120) - .001, S("stats", .44)),
+    C(T(120), S("stats", .74)), N(T(122) - .001, S("stats", .9)),
+    C(T(122), S("saga", .06)), N(T(124) - .001, S("saga", .2)),
+    C(T(124), S("saga", .535)), N(T(126) - .001, S("saga", .62)),
+    C(T(126), S("saga", .8)), N(T(128) - .001, S("saga", .92)),
+    C(T(128), S("avatar", .42)), N(T(130) - .001, S("avatar", .72)),
+    C(T(130), P.at("#closet", .05)), N(T(132) - .001, P.at("#closet", .45)),
+    C(T(132), P.at(".insights", .3)), N(T(134) - .001, P.at(".insights", .7)),
+    C(T(134), P.at("#vault", .05)), N(T(136) - .001, P.at("#vault", .35)),
+    C(T(136), P.at(".vault__head--groups", -.2)), N(T(138) - .001, P.at(".vault__head--groups", .1)),
+    C(T(138), P.at("#stage")), N(T(140) - .001, P.at("#stage")),
+    C(T(140), P.at("#discord")), N(T(144), P.at("#discord")),
+    N(SONG.duration, P.end),                                              // outro
   ];
+  // one-shot cues on the timeline (fired only when the playhead crosses them while driving)
+  const CUES = [
+    { t: T(8), fx: "808" }, { t: T(111), fx: "rewind" }, { t: T(112), fx: "slam" },
+    { t: T(124), fx: "bleed" }, { t: T(144), fx: "outro" },
+    ...NODES.filter((n) => n.cut && n.t !== SONG.drop && n.t !== T(80)).map((n) => ({ t: n.t, fx: "cut" })),
+  ].sort((a, b) => a.t - b.t);
 
-  function stepped(t, t0, t1, unit, move = .55) {
-    const lin = (x) => clamp((x - t0) / (t1 - t0));
-    const g = (t - SONG.offset) / unit, k = Math.floor(g), fr = g - k;
-    const qa = lin(SONG.offset + k * unit), qb = lin(SONG.offset + (k + 1) * unit);
-    return qa + (qb - qa) * easeOut4(clamp(fr / move));
-  }
-
-  function keyIndex(t) {
-    let i = 0;
-    while (i < KEYS.length - 1 && KEYS[i + 1].t <= t) i++;
-    return i;
-  }
-
-  function desired(t) {
-    const i = keyIndex(t), k = KEYS[i], n = KEYS[i + 1];
-    const y0 = k.y();
-    if (!n) return y0;
-    const y1 = k.to ? k.to() : n.cut ? y0 : n.y();
-    const q = clamp((t - k.t) / (n.t - k.t));
-    let e = 0;
-    switch (k.m) {
-      case "lin": e = q; break;
-      case "ease": e = easeIO(q); break;
-      case "out": e = easeOut(q); break;
-      case "in": e = Math.pow(q, 2.4); break;
-      case "rewind": e = q < .5 ? 8 * q * q * q * q : 1 - Math.pow(-2 * q + 2, 4) / 2; break;
-      case "beats": e = stepped(t, k.t, n.t, BEAT); break;
-      case "bars": e = stepped(t, k.t, n.t, BAR, .5); break;
+  let runs = [], runsV = -1;
+  function buildRuns() {
+    runs = [];
+    let cur = null;
+    for (const n of NODES) {
+      if (!cur || n.cut) { cur = { t0: n.t, pts: [] }; runs.push(cur); }
+      cur.pts.push({ t: n.t, y: n.y() });
     }
-    return y0 + (y1 - y0) * e;
+    for (const r of runs) r.m = slopes(r.pts);
+    runsV = V.layoutV;
   }
+  // Fritsch–Carlson monotone slopes
+  function slopes(p) {
+    const n = p.length, d = [], m = new Array(n).fill(0);
+    if (n < 2) return m;
+    for (let i = 0; i < n - 1; i++) d[i] = (p[i + 1].y - p[i].y) / (p[i + 1].t - p[i].t);
+    m[0] = d[0]; m[n - 1] = d[n - 2];
+    for (let i = 1; i < n - 1; i++) m[i] = d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2;
+    for (let i = 0; i < n - 1; i++) {
+      if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+      const a = m[i] / d[i], b = m[i + 1] / d[i], h = a * a + b * b;
+      if (h > 9) { const k = 3 / Math.sqrt(h); m[i] = k * a * d[i]; m[i + 1] = k * b * d[i]; }
+    }
+    return m;
+  }
+  function desired(t) {
+    if (runsV !== V.layoutV) buildRuns();
+    let r = runs[0];
+    for (const x of runs) { if (x.t0 <= t) r = x; else break; }
+    const p = r.pts, last = p.length - 1;
+    if (t <= p[0].t) return p[0].y;
+    if (t >= p[last].t) return p[last].y;
+    let i = 0;
+    while (i < last - 1 && p[i + 1].t <= t) i++;
+    const h = p[i + 1].t - p[i].t, s = (t - p[i].t) / h, s2 = s * s, s3 = s2 * s;
+    return (2 * s3 - 3 * s2 + 1) * p[i].y + (s3 - 2 * s2 + s) * h * r.m[i] + (-2 * s3 + 3 * s2) * p[i + 1].y + (s3 - s2) * h * r.m[i + 1];
+  }
+  const runIndex = (t) => { let k = 0; for (let i = 0; i < runs.length; i++) if (runs[i].t0 <= t) k = i; return k; };
 
+  /* autopilot: on by default. It owns the view (scroll is locked); turning it off takes two
+     deliberate clicks and stops everything. */
   const pilot = {
-    on: !reduced, user: false, entered: false,
-    from: null, at: 0, y: 0, key: -1,
-    get driving() { return this.on && !this.user && this.entered && (track.playing || track.waiting) && !track.ended; },
+    on: !reduced, entered: false, armed: 0, from: null, at: 0, run: -1, lastHint: 0,
+    get driving() { return this.on && this.entered && !track.ended && !track.failed; },
   };
 
-  function takeOver() {
-    if (!pilot.driving) return;
-    pilot.user = true;
-    say("autopilot off — it's your scroll. hit autopilot to rejoin the song");
+  function glideFromHere() { pilot.from = V.y; pilot.at = performance.now(); }
+  function turnOn(msg = true) {
+    pilot.on = true;
+    pilot.armed = 0;
+    if (track.ended) { track.el.currentTime = 0; clock.sync(); reseek(0); }
+    glideFromHere();
+    pilot.run = -1;
+    track.play().catch(() => say("tap play to start the track"));
+    if (msg) say("autopilot on — riding the song");
     syncButtons();
   }
-  function rejoin() {
-    pilot.on = true;
-    pilot.user = false;
-    pilot.from = scrollY;
-    pilot.at = performance.now();
-    pilot.key = keyIndex(F.t);
-    if (track.ended || (!track.playing && track.el.paused)) track.play().catch(() => {});
+  function turnOff() {
+    pilot.on = false;
+    pilot.armed = 0;
+    track.pause();
+    say("ruins your experience with it off gng but you do you", 4200);
     syncButtons();
+  }
+  function autoClick() {
+    if (!pilot.on || !pilot.driving) return turnOn();
+    const now = performance.now();
+    if (pilot.armed && now - pilot.armed < 4000) return turnOff();
+    pilot.armed = now;
+    say("click autopilot again to turn it off", 4000);
+    syncButtons();
+    setTimeout(() => { if (pilot.armed && performance.now() - pilot.armed >= 3950) { pilot.armed = 0; syncButtons(); } }, 4000);
   }
 
-  // anything a person does to scroll hands control back to them
-  addEventListener("wheel", (e) => { if (Math.abs(e.deltaY) + Math.abs(e.deltaX) > 2) takeOver(); }, { passive: true });
-  addEventListener("touchmove", (e) => { if (!e.target.closest?.(".deck")) takeOver(); }, { passive: true });
+  // while autopilot drives, the page doesn't scroll by hand — say how to take over instead
+  let deckPeek = 0;
+  function hint() {
+    if (!pilot.driving) return;
+    deckPeek = performance.now();
+    const now = performance.now();
+    if (now - pilot.lastHint > 5000) { pilot.lastHint = now; say("autopilot's driving — click autopilot off twice to drive yourself", 3200); }
+  }
+  addEventListener("wheel", (e) => { if (V.auto) { e.preventDefault(); if (Math.abs(e.deltaY) > 4) hint(); } }, { passive: false });
+  addEventListener("touchmove", (e) => { if (V.auto && !e.target.closest?.(".deck")) { e.preventDefault(); hint(); } }, { passive: false });
   addEventListener("keydown", (e) => {
     if (e.target.closest?.("input, textarea, [role=slider]")) return;
-    if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End"].includes(e.key) || (e.key === " " && !e.target.closest?.("button, a"))) takeOver();
+    const scrollKey = ["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End"].includes(e.key) || (e.key === " " && !e.target.closest?.("button, a"));
+    if (scrollKey && V.auto) { e.preventDefault(); hint(); }
     if (!pilot.entered || e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.key === "a" || e.key === "A") {
-      if (pilot.on && !pilot.user && pilot.driving) { pilot.on = false; syncButtons(); say("autopilot off — scroll at your own pace"); }
-      else { rejoin(); say("autopilot on — riding the song"); }
-    }
+    if (e.key === "a" || e.key === "A") autoClick();
     if (e.key === "m" || e.key === "M") { track.setMuted(!track.muted); syncButtons(); }
   });
-  addEventListener("mousedown", (e) => { if (e.clientX >= document.documentElement.clientWidth) takeOver(); });
-  document.addEventListener("click", (e) => { if (e.target.closest?.('a[href^="#"]')) takeOver(); }, true);
 
   function direct(now) {
-    if (!pilot.driving) return;
+    const driving = pilot.driving;
+    V.lock(driving);
+    if (!driving) return;
     const t = F.t;
-    const i = keyIndex(t);
-    if (i !== pilot.key) {
-      const crossed = pilot.key >= 0 && i === pilot.key + 1;
-      pilot.key = i;
-      const k = KEYS[i];
-      if (k.cut) { state.snap = true; if (crossed && k.t !== SONG.drop && k.t !== T(80)) fx.cut(); }
-      if (crossed && k.fx) fx.cue(k.fx);
-    }
-    if (F.gap && !KEYS[i].cut) return;   // the music stops → so does the page
+    if (runsV !== V.layoutV) buildRuns();
+    const ri = runIndex(t);
+    if (ri !== pilot.run) { if (pilot.run !== -1 && pilot.from == null) state.snap = true; pilot.run = ri; }
     let y = desired(t);
     if (pilot.from != null) {
-      const k = clamp((now - pilot.at) / 1300);
+      const k = clamp((now - pilot.at) / 1100);
       y = lerp(pilot.from, y, easeIO(k));
+      state.snap = false;
       if (k >= 1) pilot.from = null;
-      else state.snap = false;
     }
-    pilot.y = y;
-    const ry = Math.round(y);
-    if (Math.abs(ry - scrollY) >= 1) scrollTo(0, ry);
+    V.target = clamp(y, 0, V.max);
+  }
+  function cueCrossings(prev, t) {
+    if (!pilot.driving || !track.playing || t < prev || t - prev > .5) return;
+    for (const c of CUES) if (prev < c.t && t >= c.t) c.fx === "cut" ? fx.cut() : fx.cue(c.fx);
   }
 
   /* ------------------------------------------------------------------------
@@ -553,7 +600,7 @@
 
   function onEnded() {
     root.classList.remove("is-outro");
-    pilot.key = -1;
+    pilot.run = -1;
     syncButtons();
     say("that's the track — hit replay in the player to run it back");
   }
@@ -574,14 +621,13 @@
     // camera: shake + push-in on the run-up + a punch on the kicks during drops
     const sh = fx.shake;
     const zoom = reduced ? 0 : (pilot.driving ? F.tension * .045 : F.tension * .015) + fx.punch * .012;
-    const m = fxEls.main;
-    if (sh > .3 || zoom > .0005) {
-      const tt = performance.now() / 1000;
-      const x = sh * (Math.sin(tt * 71) * .6 + Math.sin(tt * 113) * .4), y = sh * (Math.cos(tt * 83) * .6 + Math.sin(tt * 57) * .4) * .7;
-      m.style.transformOrigin = `50% ${scrollY + innerHeight / 2}px`;
-      m.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) scale(${(1 + zoom).toFixed(4)}) rotate(${(sh * .012 * Math.sin(tt * 47)).toFixed(3)}deg)`;
-      m._cam = true;
-    } else if (m._cam) { m.style.transform = ""; m.style.transformOrigin = ""; m._cam = false; }
+    const cam = V.cam, tt = performance.now() / 1000;
+    if (sh > .3) {
+      cam.x = sh * (Math.sin(tt * 71) * .6 + Math.sin(tt * 113) * .4);
+      cam.y = sh * (Math.cos(tt * 83) * .6 + Math.sin(tt * 57) * .4) * .7;
+      cam.r = sh * .012 * Math.sin(tt * 47);
+    } else { cam.x = cam.y = cam.r = 0; }
+    cam.s = zoom > .0005 ? 1 + zoom : 1;
 
     // letterbox + captions
     let lb = F.tension * (pilot.driving ? 11 : 5);
@@ -601,7 +647,7 @@
     fxEls.black.style.opacity = dark ? (pilot.driving ? .96 : .6) : 0;
 
     // VHS rewind
-    if (fx.rewind) fxEls.tc.textContent = `${String(Math.max(0, Math.round(scrollY / 7))).padStart(5, "0")}  ◀◀`;
+    if (fx.rewind) fxEls.tc.textContent = `${String(Math.max(0, Math.round(V.y / 7))).padStart(5, "0")}  ◀◀`;
 
     // blood on the glass: let go once the takedown is off screen
     blood.frame(dt);
@@ -661,9 +707,12 @@
     deck.play?.setAttribute("aria-label", playing ? "Pause" : track.ended ? "Replay" : "Play");
     deck.play?.classList.toggle("is-playing", playing);
     deck.play?.classList.toggle("is-ended", track.ended);
-    const autoOn = pilot.on && !pilot.user;
+    const autoOn = pilot.on;
     deck.auto?.setAttribute("aria-pressed", String(autoOn));
     deck.auto?.classList.toggle("is-on", autoOn);
+    deck.auto?.classList.toggle("is-armed", !!pilot.armed);
+    const lab = deck.auto?.querySelector("span");
+    if (lab) lab.textContent = pilot.armed ? "click again" : "autopilot";
     deck.mute?.setAttribute("aria-label", track.muted ? "Unmute" : "Mute");
     deck.mute?.classList.toggle("is-muted", track.muted);
     const sp = $("#stagePlay");
@@ -677,18 +726,15 @@
 
   function togglePlay() {
     if (track.playing || track.waiting) track.pause();
-    else track.play().then(() => { if (pilot.on && pilot.entered) rejoin(); }).catch(() => say("couldn't start the track — tap again"));
+    else if (pilot.on && (track.ended || !pilot.driving)) turnOn(false);
+    else track.play().catch(() => say("couldn't start the track — tap again"));
     syncButtons();
   }
   deck.play?.addEventListener("click", togglePlay);
   $("#stagePlay")?.addEventListener("click", togglePlay);
   $("#npChip")?.addEventListener("click", togglePlay);
   deck.mute?.addEventListener("click", () => { track.setMuted(!track.muted); syncButtons(); });
-  deck.auto?.addEventListener("click", () => {
-    if (pilot.on && !pilot.user) { pilot.on = false; say("autopilot off — scroll at your own pace"); }
-    else { rejoin(); say("autopilot on — riding the song"); }
-    syncButtons();
-  });
+  deck.auto?.addEventListener("click", autoClick);
 
   // seeking
   function seekTo(t) {
@@ -700,8 +746,8 @@
     blood.release = true;
     fx.rewindEnd();
     root.classList.remove("is-outro");
-    if (pilot.on) { pilot.user = false; pilot.from = scrollY; pilot.at = performance.now(); pilot.key = keyIndex(t); }
-    if (!track.playing) track.play().catch(() => {});
+    if (pilot.on) { glideFromHere(); pilot.run = -1; }
+    if (!track.playing && pilot.on) track.play().catch(() => {});
     syncButtons();
   }
   if (deck.scrub) {
@@ -740,7 +786,8 @@
     const stageSeen = sr && sr.bottom > 0 && sr.top < innerHeight;
     const onStage = sr && sr.top < innerHeight * .35 && sr.bottom > innerHeight * .65;   // the big meter has the floor
     if (now - lastAvoid > 150) { lastAvoid = now; blocked = coversCta(); }
-    const showDeck = pilot.entered && scrollY > innerHeight * .42 && !onStage && !blocked;
+    const peek = now - deckPeek < 4000;   // someone tried to scroll: show them where the controls are
+    const showDeck = pilot.entered && (V.y > innerHeight * .42 || peek) && !onStage && !blocked;
     root.classList.toggle("has-deck", showDeck);
 
     // meters: the deck one always, the stage one while it's on screen
@@ -785,17 +832,19 @@
     setText("stageTime", mmss(F.t));
   }
 
-  // CSS hooks: the whole page can lean on these
+  // CSS hooks: written only on the few containers whose styles read them — setting them on <html>
+  // would restyle the entire page every frame
+  const varHosts = [".grain", ".nav", ".saga", ".stage", ".deck", ".np", "#discord"].map((q) => $(q)).filter(Boolean);
   const vars = { kick: -1, beat: -1, level: -1, hat: -1, tension: -1, snare: -1 };
   function cssVars() {
-    const set = (k, v) => { v = Math.round(v * 1000) / 1000; if (vars[k] !== v) { vars[k] = v; root.style.setProperty(`--${k}`, v); } };
     const live = F.on && !F.gap;
-    set("kick", live ? F.kick : 0);
-    set("beat", live ? F.beat : 0);
-    set("level", live ? F.level : 0);
-    set("hat", live ? F.hat : 0);
-    set("snare", live ? F.snare : 0);
-    set("tension", F.tension);
+    const next = { kick: live ? F.kick : 0, beat: live ? F.beat : 0, level: live ? F.level : 0, hat: live ? F.hat : 0, snare: live ? F.snare : 0, tension: F.tension };
+    for (const k in next) {
+      const v = Math.round(next[k] * 1000) / 1000;
+      if (vars[k] === v) continue;
+      vars[k] = v;
+      for (const el of varHosts) el.style.setProperty(`--${k}`, v);
+    }
   }
 
   listeners.kick.push((s) => { meters.deck?.kick(s); meters.stage?.kick(s); });
@@ -806,7 +855,7 @@
     if (!ms || !window.MediaMetadata) return;
     ms.metadata = new MediaMetadata({ title: SONG.title, artist: SONG.artist, album: "finalarc", artwork: [{ src: new URL(SONG.cover, location.href).href, sizes: "640x640", type: "image/jpeg" }] });
     const set = (a, fn) => { try { ms.setActionHandler(a, fn); } catch {} };
-    set("play", () => { track.play().then(() => { if (pilot.on) rejoin(); }).catch(() => {}); });
+    set("play", () => { track.play().catch(() => {}); });
     set("pause", () => track.pause());
     set("seekto", (d) => seekTo(d.seekTime));
     set("seekbackward", () => seekTo(F.t - 10));
@@ -826,13 +875,23 @@
       pilot.entered = true;
       mediaSession();
       if (!sound) { pilot.on = false; syncButtons(); return; }
-      track.play().then(() => { pilot.key = -1; syncButtons(); }).catch((e) => {
+      pilot.on = true;
+      pilot.run = -1;
+      track.play().then(syncButtons).catch((e) => {
         console.warn("play", e);
-        pilot.on = false;
-        syncButtons();
         say("tap play in the player to start the track");
+        syncButtons();
       });
     },
+    // nav links while autopilot drives: jump the show to that part of the song
+    goto(hash) {
+      if (!pilot.driving) return false;
+      const at = { "#top": 0, "#stats": T(8), "#game": T(12), "#closet": T(36), "#vault": T(64), "#stage": T(80), "#discord": T(104) }[hash];
+      if (at == null) return false;
+      seekTo(at);
+      return true;
+    },
+    get fx() { return fx; },
     unlock() { track.wire(); track.ctx?.resume?.(); },
     onNextBeat(fn) {
       if (!track.playing || reduced) return fn();
