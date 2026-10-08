@@ -169,10 +169,10 @@ html.has-cursor .cursor-tag { display: block; }
 .card {
   position: relative; border: 1px solid var(--line); border-radius: var(--radius);
   /* a soft specular sheet that follows the pointer, under the glass tint */
+  /* solid glass, no backdrop-filter: a blur behind every card re-renders the moving background each frame */
   background:
     radial-gradient(520px circle at var(--mx, 50%) var(--my, 0%), rgba(255, 236, 220, calc(var(--glare) * .075)), transparent 42%),
-    var(--glass);
-  backdrop-filter: blur(22px) saturate(140%); -webkit-backdrop-filter: blur(22px) saturate(140%);
+    linear-gradient(160deg, rgba(30, 28, 38, .9), rgba(14, 13, 19, .86));
   box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8), inset 0 1px 0 rgba(255, 255, 255, .05);
   transition: --glare .5s var(--ease), border-color .5s var(--ease), box-shadow .6s var(--ease);
 }
@@ -643,7 +643,7 @@ html.blood {
 .dc__tag { position: absolute; right: 14px; top: 14px; z-index: 2; padding: 5px 10px; border-radius: 999px; background: rgba(0, 0, 0, .45); backdrop-filter: blur(8px); color: var(--ink); }
 .dc--alt .dc__banner-art { background: conic-gradient(from 90deg at 50% 50%, #2b6bff, #00d0ff, #1a1030, #7c5cff, #2b6bff); }
 .saga .sticky.shake { animation: shake .55s cubic-bezier(.36, .07, .19, .97); }
-@keyframes shake { 10%, 90% { transform: translate(-2px, 1px); } 20%, 80% { transform: translate(5px, -3px); } 30%, 50%, 70% { transform: translate(-9px, 4px) rotate(-.4deg); } 40%, 60% { transform: translate(9px, -2px) rotate(.4deg); } }
+@keyframes shake { 10%, 90% { translate: -2px 1px; } 20%, 80% { translate: 5px -3px; } 30%, 50%, 70% { translate: -9px 4px; rotate: -.4deg; } 40%, 60% { translate: 9px -2px; rotate: .4deg; } }
 
 /* ==========================================================================
    v3 — the show: music, autopilot, meters, drop fx
@@ -718,7 +718,7 @@ html.is-blackout .fx__flat path { animation: flatline .42s linear forwards; }
 .fx__tc { right: 5vw; font-size: clamp(13px, 1.5vw, 20px); font-variant-numeric: tabular-nums; }
 @keyframes blink { 50% { opacity: 0; } }
 html.is-rewind .fx__vhs { opacity: 1; }
-html.is-rewind main { filter: saturate(.5) contrast(1.18) hue-rotate(-10deg); }
+
 
 /* ---------- the deck ---------- */
 .deck {
@@ -831,3 +831,51 @@ html.is-playing .stage__live i { background: var(--ember); box-shadow: 0 0 0 cal
   .stage__title, .saga__stamp, .nav__logo svg, .stage__bg::after { content: ""; position: absolute; inset: 0; background: radial-gradient(52% 50% at 50% 46%, rgba(6, 6, 8, .78), rgba(6, 6, 8, .35) 60%, transparent 85%); }
 .stage__bg img { scale: none; }
 }
+
+/* ==========================================================================
+   v4 — smooth camera, preload, 3d world
+   ========================================================================== */
+
+/* the page is one fixed layer moved by transform; .spacer gives native scroll its length */
+html { scrollbar-gutter: stable; }
+html.vscroll main { position: fixed; top: 0; left: 0; width: 100%; will-change: transform; }
+html.vscroll .sticky { position: relative; will-change: transform; }
+.spacer { width: 1px; pointer-events: none; }
+html.is-locked, html.is-locked body { overflow: hidden; overscroll-behavior: none; }
+
+/* gate: what's loading, live */
+.gate__list { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 14px; color: var(--ink-3); font-size: 10.5px; min-height: 1.5em; }
+.gate__list span { transition: color .3s; font-variant-numeric: tabular-nums; }
+.gate__list span.ok { color: var(--ink-2); }
+.gate__panel { transition-duration: .95s; }
+
+/* autopilot: the first click arms it, the second one turns it off */
+.deck__auto.is-armed { color: #fff; border-color: #ff3b3b; background-color: rgba(255, 40, 52, .2); animation: armed .42s cubic-bezier(.36, .07, .19, .97); }
+.deck__auto.is-armed i { background: #ff3b3b; box-shadow: 0 0 0 4px rgba(255, 59, 59, .25); }
+@keyframes armed { 20%, 60% { translate: -3px 0; } 40%, 80% { translate: 3px 0; } }
+
+/* 3d world: above the page, under the lens fx */
+.fx__3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.fx__labels { position: absolute; inset: 0; overflow: hidden; }
+html.has-3d .avatar__stage img { opacity: 0 !important; }
+.bubble3d, .tag3d { position: absolute; left: 0; top: 0; will-change: translate; white-space: nowrap; transform-origin: 0 0; }
+.bubble3d {
+  padding: 9px 14px; border-radius: 14px; background: #fff; color: #111; font: 700 15px/1.2 var(--f-display); letter-spacing: -.01em;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45); transform: translate(-50%, calc(-100% - 14px)); opacity: 0; scale: .7; transition: opacity .18s, scale .35s cubic-bezier(.2, 1.6, .4, 1);
+  max-width: 260px; white-space: normal; text-align: center;
+}
+.bubble3d::after { content: ""; position: absolute; left: 50%; top: 100%; translate: -50% -1px; border: 8px solid transparent; border-top-color: #fff; }
+.bubble3d.is-on { opacity: 1; scale: 1; }
+.tag3d { transform: translate(-50%, calc(-100% - 6px)); font: 800 14px var(--f-display); color: #fff; letter-spacing: .01em; text-shadow: 0 0 2px #000, 0 1px 3px #000, 0 0 10px rgba(0, 0, 0, .6); opacity: 0; transition: opacity .3s; }
+.tag3d.is-on { opacity: 1; }
+@media (max-width: 600px) { .bubble3d { font-size: 13px; padding: 7px 11px; } .tag3d { font-size: 12px; } }
+
+/* lighter tiers if the device can't keep up */
+html[data-tier="1"] .grain, html[data-tier="0"] .grain { animation: none; }
+html[data-tier="0"] .deck { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(12, 12, 16, .95); }
+html[data-tier="0"] .ch__rise, html[data-tier="0"] .ch__cliff, html[data-tier="0"] .item__art svg { filter: none; }
+.bubble3d--sys { background: #111114; color: #ff4b55; font: 600 13px/1.25 var(--f-mono, ui-monospace, monospace); border: 1px solid rgba(255, 36, 51, .5); box-shadow: 0 0 30px rgba(255, 36, 51, .35); }
+.bubble3d--sys::after { border-top-color: #111114; }
+.oof3d { position: absolute; left: 0; top: 0; font: 900 clamp(48px, 9vw, 120px)/1 var(--f-display); color: #fff; letter-spacing: -.04em; text-shadow: 0 4px 0 #ff2433, 0 0 40px rgba(255, 36, 51, .7); translate: -50% -50%; opacity: 0; pointer-events: none; }
+.oof3d.is-on { animation: oof 1.6s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+@keyframes oof { 0% { opacity: 0; scale: .3; } 12% { opacity: 1; scale: 1.15; } 70% { opacity: 1; scale: 1; translate: -50% -80%; } 100% { opacity: 0; scale: .96; translate: -50% -120%; } }

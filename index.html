@@ -13,6 +13,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500;600;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <link rel="modulepreload" href="vendor/three.module.min.js">
+  <link rel="modulepreload" href="rig.js">
+  <link rel="modulepreload" href="stage3d.js">
+  <link rel="preload" href="audio/cover.jpg" as="image">
 </head>
 <body class="is-loading">
 
@@ -35,6 +39,7 @@
       <div class="gate__count"><span id="gateCount">000</span><sup>%</sup></div>
       <div class="gate__bar"><span id="gateBar"></span></div>
       <div class="gate__meta mono"><span>finalarc</span><span id="gateStatus">syncing roblox</span></div>
+      <div class="gate__list mono" id="gateList" aria-hidden="true"></div>
       <div class="gate__track mono"><span class="gate__eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>aloneagain — <span class="artist">NIVEK FFORHS</span></span><em>sound on</em></div>
       <div class="gate__actions">
         <button class="gate__enter" id="gateEnter" type="button">
@@ -328,10 +333,12 @@
 
   <!-- the show: drop fx -->
   <div class="fx" aria-hidden="true">
+    <div class="fx__black"><svg class="fx__flat" viewBox="0 0 1000 100" preserveAspectRatio="none"><path pathLength="1" d="M0 50H452l10-14 12 34 12-44 9 24h505"/></svg></div>
+    <canvas class="fx__3d" id="stage3d"></canvas>
+    <div class="fx__labels" id="labels3d"></div>
     <canvas class="fx__blood" id="bloodfx"></canvas>
     <div class="fx__box fx__box--t"><span class="fx__cap mono" id="capTop"></span></div>
     <div class="fx__box fx__box--b"><span class="fx__cap mono" id="capBot"></span></div>
-    <div class="fx__black"><svg class="fx__flat" viewBox="0 0 1000 100" preserveAspectRatio="none"><path pathLength="1" d="M0 50H452l10-14 12 34 12-44 9 24h505"/></svg></div>
     <div class="fx__vhs"><span class="fx__osd mono">◀◀ rew</span><span class="fx__tc mono" id="vhsTc"></span></div>
     <div class="fx__flash"></div>
   </div>
@@ -373,5 +380,6 @@
   <script src="meter.js" defer></script>
   <script src="main.js" defer></script>
   <script src="show.js" defer></script>
+  <script src="stage3d.js" type="module"></script>
 </body>
 </html>
