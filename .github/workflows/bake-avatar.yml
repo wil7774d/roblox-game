@@ -24,7 +24,10 @@ jobs:
   bake:
     runs-on: ubuntu-latest
     steps:
+      # the branch's latest commit, not the one that triggered the run (re-runs must push on top of it)
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - uses: actions/setup-node@v4
         with:
@@ -54,4 +57,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Bake avatar ($(date -u +%Y-%m-%d))"
-          git push
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
