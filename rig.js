@@ -1,16 +1,15 @@
 /* ==========================================================================
    finalarc — rig
-   R6-style characters for the 3d world, all sharing one skeleton:
+   Your real Roblox avatar (the avatar-3d OBJ) cut onto one shared skeleton:
      root (feet)
       └ pelvis (hip height)
-         ├ torso ─┬ neck → head
-         │        ├ shL → left arm  (+ fistL: knuckles + middle finger)
-         │        └ shR → right arm (+ fistR)
+         ├ torso ─┬ neck → head (+ hats)
+         │        ├ shL → hangL → left arm  (+ fistL: knuckles + middle finger)
+         │        └ shR → hangR → right arm (+ fistR)
          ├ hipL → left leg
          └ hipR → right leg
-   buildR6()     a procedural blocky avatar in your body colours (the fallback)
-   rigFromObj()  your real Roblox avatar mesh (avatar-3d OBJ) cut into those parts
-   Rig           poses + clips (idle, run, flip, wave, sit, headbang …), blended
+   rigFromObj()  classifies the mesh parts and hangs them on the joints
+   Rig           poses + clips (idle, bob, flip, wave, headbang …), blended
    Units are studs; the character faces +z (the camera), its left hand is +x.
    ========================================================================== */
 import * as THREE from "./vendor/three.module.min.js";
@@ -34,91 +33,6 @@ function buildFist(name, mat, armW = 1, armD = 1, endY = -1.5) {
   g.add(finger, k1, k2);
   g.scale.setScalar(.001);
   g.visible = false;
-  return g;
-}
-
-/* --- canvas decals ---------------------------------------------------------- */
-function faceTexture() {
-  const c = document.createElement("canvas"); c.width = c.height = 256;
-  const x = c.getContext("2d");
-  x.fillStyle = "#111";
-  x.beginPath(); x.ellipse(88, 104, 15, 26, 0, 0, Math.PI * 2); x.fill();
-  x.beginPath(); x.ellipse(168, 104, 15, 26, 0, 0, Math.PI * 2); x.fill();
-  x.lineWidth = 12; x.lineCap = "round"; x.strokeStyle = "#111";
-  x.beginPath(); x.arc(128, 128, 62, Math.PI * .2, Math.PI * .8); x.stroke();
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-function logoTexture() {
-  const c = document.createElement("canvas"); c.width = c.height = 256;
-  const x = c.getContext("2d");
-  x.lineWidth = 22; x.lineCap = "round"; x.strokeStyle = "#ff4b2b";
-  x.beginPath(); x.arc(128, 170, 70, Math.PI, 0); x.stroke();
-  x.fillStyle = "#ff4b2b"; x.beginPath(); x.arc(128, 170, 13, 0, Math.PI * 2); x.fill();
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-
-/* --- procedural R6 ------------------------------------------------------------
-   colors: head/torso/armL/armR/legL/legR · headless: no head (hats float, like the
-   real thing) · korblox: the skinny right leg · hats: "horns" | "crown" | "valk" */
-export function buildR6({ colors = {}, headless = false, korblox = false, hats = [] } = {}) {
-  const c = { head: "#e9d3bb", torso: "#141418", armL: "#e9d3bb", armR: "#e9d3bb", legL: "#24242c", legR: "#24242c", ...colors };
-  const root = group("root");
-  const pelvis = group("pelvis", 0, 2, 0);
-  const torso = group("torso");
-  const neck = group("neck", 0, 2, 0);
-  const shL = group("shL", 1.5, 1.5, 0), shR = group("shR", -1.5, 1.5, 0);
-  const hipL = group("hipL", .5, 0, 0), hipR = group("hipR", -.5, 0, 0);
-  root.add(pelvis); pelvis.add(torso, hipL, hipR); torso.add(neck, shL, shR);
-
-  const limb = new RoundedBoxGeometry(1, 2, 1, 2, .07);
-  torso.add(mesh(new RoundedBoxGeometry(2, 2, 1, 2, .07), material(c.torso), 0, 1, 0));
-  const logo = mesh(new THREE.PlaneGeometry(1.15, 1.15), new THREE.MeshBasicMaterial({ map: logoTexture(), transparent: true }), 0, 1.05, .506);
-  torso.add(logo);
-  if (!headless) {
-    const head = mesh(new RoundedBoxGeometry(1.25, 1.2, 1.25, 4, .4), material(c.head), 0, .62, 0);
-    head.name = "head";
-    neck.add(head);
-    neck.add(mesh(new THREE.PlaneGeometry(.95, .95), new THREE.MeshBasicMaterial({ map: faceTexture(), transparent: true, depthWrite: false }), 0, .62, .632));
-  }
-  const mArmL = material(c.armL), mArmR = material(c.armR);
-  shL.add(mesh(limb, mArmL, 0, -.5, 0)); shR.add(mesh(limb, mArmR, 0, -.5, 0));
-  hipL.add(mesh(limb, material(c.legL), 0, -1, 0));
-  if (korblox) {
-    const bone = material("#26324a", { roughness: .4, metalness: .35 });
-    hipR.add(mesh(new RoundedBoxGeometry(.42, 1.7, .42, 2, .08), bone, .08, -.85, 0));
-    hipR.add(mesh(new RoundedBoxGeometry(.62, .34, .9, 2, .08), bone, .08, -1.83, .12));
-    hipR.add(mesh(new THREE.OctahedronGeometry(.2), material("#7fd7ff", { emissive: new THREE.Color("#3aa8ff"), emissiveIntensity: 1.4 }), .08, -.55, .24));
-  } else hipR.add(mesh(limb, material(c.legR), 0, -1, 0));
-  shL.add(buildFist("fistL", mArmL)); shR.add(buildFist("fistR", mArmR));
-  for (const h of hats) { const a = accessory(h); if (a) neck.add(a); }
-  root.userData = { height: 5.2, top: headless ? (hats.length ? 5.6 : 4.1) : (hats.length ? 6 : 5.3), kind: "r6" };
-  return root;
-}
-
-// a few signature accessories, by catalogue name
-function accessory(kind) {
-  const g = group(`hat-${kind}`);
-  if (kind === "horns") {
-    const m = material("#dff4ff", { emissive: new THREE.Color("#5ab8ff"), emissiveIntensity: .9, roughness: .3 });
-    for (const s of [1, -1]) {
-      const horn = mesh(new THREE.ConeGeometry(.17, 1.25, 10), m, .5 * s, 1.55, 0);
-      horn.rotation.z = -.55 * s;
-      const tip = mesh(new THREE.ConeGeometry(.08, .55, 8), m, .5 * s + .38 * s, 2.2, 0);
-      tip.rotation.z = .35 * s;
-      g.add(horn, tip);
-    }
-  } else if (kind === "crown") {
-    const gold = material("#ffcf3d", { metalness: .7, roughness: .3, emissive: new THREE.Color("#4a3200"), emissiveIntensity: .5 });
-    g.add(mesh(new THREE.BoxGeometry(1.1, .26, 1.1), gold, 0, 1.38, 0));
-    for (const [x, z] of [[-.42, -.42], [.42, -.42], [-.42, .42], [.42, .42], [0, .5], [0, -.5], [.5, 0], [-.5, 0]]) g.add(mesh(new THREE.BoxGeometry(.2, .3, .2), gold, x, 1.62, z));
-    g.add(mesh(new THREE.BoxGeometry(.22, .22, .06), material("#ff2a3a", { emissive: new THREE.Color("#ff2a3a"), emissiveIntensity: .6 }), 0, 1.4, .56));
-  } else if (kind === "valk") {
-    const helm = material("#b06bff", { metalness: .5, roughness: .35 }), wing = material("#ffffff", { roughness: .5 });
-    g.add(mesh(new RoundedBoxGeometry(1.32, .55, 1.32, 2, .2), helm, 0, 1.12, 0));
-    for (const s of [1, -1]) { const w = mesh(new RoundedBoxGeometry(.12, .9, .62, 2, .05), wing, .72 * s, 1.5, -.1); w.rotation.z = -.5 * s; g.add(w); }
-  } else return null;
   return g;
 }
 
@@ -283,7 +197,7 @@ export const CLIPS = {
   run: (t, b) => { const ph = b * PI; return { pelvis: [.24, 0, 0], neck: [-.15, 0, 0], hipL: [.95 * sin(ph), 0, 0], hipR: [-.95 * sin(ph), 0, 0], shL: [-1.05 * sin(ph), 0, .08], shR: [1.05 * sin(ph), 0, -.08], lift: .2 * Math.abs(sin(ph)) }; },
   moonwalk: (t, b) => { const ph = -b * PI; return { pelvis: [-.08, 0, 0], neck: [.1, 0, 0], hipL: [.5 * sin(ph), 0, 0], hipR: [-.5 * sin(ph), 0, 0], shL: [-.4 * sin(ph), 0, .2], shR: [.4 * sin(ph), 0, -.2], lift: .08 * Math.abs(sin(ph)) }; },
   dance: (t, b) => { const s = sin(b * PI), p = pulse(b); return { pelvis: [.05, .2 * s, .12 * s], neck: [.15 * p, .2 * s, 0], shL: [-.3, 0, 1.1 + 1.2 * Math.max(0, s)], shR: [-.3, 0, -1.1 - 1.2 * Math.max(0, -s)], hipL: [0, 0, .12], hipR: [0, 0, -.12], lift: .16 * p }; },
-  headbang: (t, b, k) => { const p = pulse(b, 5); return { pelvis: [.22 + .38 * p, 0, 0], neck: [.15 + .55 * p, 0, 0], shL: [-.55 - .3 * p, 0, .35], shR: [-.75 - .3 * p, 0, -.3], hipL: [-.08, 0, .16], hipR: [.06, 0, -.16], lift: -.12 * p, fingerR: k > .8 ? 1 : 0 }; },
+  headbang: (t, b, k) => { const p = pulse(b, 5); return { pelvis: [.16 + .3 * p, 0, 0], neck: [.12 + .5 * p, 0, 0], shL: [-.18 - .22 * p, 0, .28], shR: [-.3 - .25 * p, 0, -.24], hipL: [-.06, 0, .14], hipR: [.05, 0, -.14], lift: -.1 * p }; },
   sit: (t, b) => { const p = pulse(b); return { pelvis: [-.08, 0, 0], neck: [.18 * p, .25 * sin(t * .5), 0], hipL: [-PI / 2, 0, .06], hipR: [-PI / 2, 0, -.06], shL: [-.55, 0, .1], shR: [-.55, 0, -.1] }; },
   sitWave: (t, b) => ({ ...CLIPS.sit(t, b), shR: [-.2, 0, -2.7 + .38 * sin(t * 10)] }),
   sitFlip: (t, b, k) => ({ ...CLIPS.sit(t, b), shR: [-2.55 - .1 * k, 0, -.12], fingerR: 1, neck: [-.05, .1, .14] }),

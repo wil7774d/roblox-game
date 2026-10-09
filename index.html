@@ -1,385 +1,190 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>finalarc</title>
-  <meta name="description" content="finalarc — roblox & discord, live.">
-  <meta name="theme-color" content="#060608">
-  <meta property="og:title" content="finalarc">
-  <meta property="og:description" content="roblox & discord, live.">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23060608'/%3E%3Cpath d='M14 46a18 18 0 0 1 36 0' fill='none' stroke='%23ff4b2b' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500;600;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
-  <link rel="modulepreload" href="vendor/three.module.min.js">
-  <link rel="modulepreload" href="rig.js">
-  <link rel="modulepreload" href="stage3d.js">
-  <link rel="preload" href="audio/cover.jpg" as="image">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>finalarc</title>
+<meta name="description" content="finalarc — Roblox player and developer. Live Roblox stats, Discord presence and the game Roblox took down.">
+<meta name="theme-color" content="#06070a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2306070a'/%3E%3Cpath d='M14 46a18 18 0 0 1 36 0' fill='none' stroke='%23ff3344' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='46' r='5' fill='%23eef2f7'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800;900&display=swap" rel="stylesheet">
+<link rel="preload" href="audio/cover.jpg" as="image">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body class="is-loading">
 
-  <!-- background artwork -->
-  <canvas id="gl" aria-hidden="true"></canvas>
-  <div class="bg-fallback" aria-hidden="true"></div>
-  <div class="grain" aria-hidden="true"></div>
-  <div class="vignette" aria-hidden="true"></div>
-  <div class="bloodwash" aria-hidden="true"></div>
+<!-- the scene behind everything -->
+<div class="bg" aria-hidden="true">
+  <div class="bg-sky"></div>
+  <img class="bg-cover" src="audio/cover.jpg" alt="">
+  <div class="bg-beam"></div>
+  <div class="bg-floor"><div class="grid"></div></div>
+  <div class="bg-horizon"></div>
+  <canvas id="snow"></canvas>
+  <div class="bg-vignette"></div>
+  <div class="bg-grain"></div>
+  <div class="redwash"></div>
+</div>
+<div class="redglow" aria-hidden="true"></div>
+<div class="tape tape-back" aria-hidden="true"><div class="tape-track" data-text="taken down overnight · 497 → 0"></div></div>
 
-  <!-- cursor -->
-  <div class="cursor" aria-hidden="true"><div class="cursor__ring"></div><div class="cursor__dot"></div></div>
-  <div class="cursor-tag mono" aria-hidden="true"></div>
-
-  <!-- intro / enter gate -->
-  <div class="gate" id="gate">
-    <div class="gate__panel gate__panel--top"></div>
-    <div class="gate__panel gate__panel--bot"></div>
-    <div class="gate__inner">
-      <div class="gate__count"><span id="gateCount">000</span><sup>%</sup></div>
-      <div class="gate__bar"><span id="gateBar"></span></div>
-      <div class="gate__meta mono"><span>finalarc</span><span id="gateStatus">syncing roblox</span></div>
-      <div class="gate__list mono" id="gateList" aria-hidden="true"></div>
-      <div class="gate__track mono"><span class="gate__eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>aloneagain — <span class="artist">NIVEK FFORHS</span></span><em>sound on</em></div>
-      <div class="gate__actions">
-        <button class="gate__enter" id="gateEnter" type="button">
-          <span class="gate__enter-txt">click to enter</span>
-        </button>
-        <button class="gate__quiet mono" id="gateQuiet" type="button">or enter without sound</button>
-      </div>
-    </div>
+<!-- joining screen: everything loads behind it, the click starts the song -->
+<div class="gate" id="gate" role="button" tabindex="0" aria-label="Click to join">
+  <div class="gate-stack">
+    <div class="gate-icon"><img id="gateIcon" alt="" decoding="async"></div>
+    <h1 class="gate-title"><span id="gateName">finalarc</span><svg class="seal" viewBox="0 0 24 24" hidden><path class="seal-path" fill="#3d74ff"/><path d="M7.6 12.3l3 3 5.8-6.2" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg></h1>
+    <p class="gate-by">By <b id="gateUser">@finalarc</b><span id="gateSince"></span></p>
+    <div class="gate-load"><i id="gateBar"></i></div>
+    <p class="gate-cta">Click to join</p>
+    <button class="gate-quiet" id="gateQuiet" type="button">or join without sound</button>
   </div>
-
-  <!-- chrome -->
-  <header class="nav">
-    <a href="#top" class="nav__logo" data-cursor="top" aria-label="Back to top">
-      <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M8 30a12 12 0 0 1 24 0" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><circle cx="20" cy="30" r="2.4" fill="currentColor"/></svg>
-    </a>
-    <nav class="nav__links mono" aria-label="Sections">
-      <a href="#stats" data-cursor="go">stats</a>
-      <a href="#game" data-cursor="go">the game</a>
-      <a href="#closet" data-cursor="go">closet</a>
-      <a href="#vault" data-cursor="go">vault</a>
-      <a href="#stage" data-cursor="go">music</a>
-      <a href="#discord" data-cursor="go">discord</a>
-    </nav>
-    <div class="nav__meta mono"><span class="nav__section" id="navSection">00 / intro</span><span class="nav__clock" id="clock">--:--:--</span></div>
-  </header>
-  <div class="progress" aria-hidden="true"><span id="progress"></span></div>
-
-  <main id="top">
-
-    <!-- 01 HERO -->
-    <section class="hero" id="hero" data-label="00 / intro">
-      <div class="hero__kicker mono" data-reveal>
-        <span class="hero__live"><span class="dot dot--live"></span> live profile — roblox × discord</span>
-        <button class="np" id="npChip" type="button" aria-label="Play the track"><span class="np__eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="np__txt">aloneagain <i>— <span class="artist">NIVEK FFORHS</span></i></span></button>
-      </div>
-
-      <h1 class="hero__title" aria-label="finalarc">
-        <span class="hero__line hero__line--1" data-split="chars">FINAL</span>
-        <span class="hero__line hero__line--2"><em class="serif" data-split="chars">the</em><span class="outline" data-split="chars">ARC</span></span>
-      </h1>
-
-      <div class="hero__grid">
-        <article class="card profile" data-tilt>
-          <div class="profile__glow"></div>
-          <div class="profile__head">
-            <div class="profile__avatar">
-              <img id="rbxHeadshot" alt="" decoding="async">
-              <span class="profile__ring"></span>
-              <span class="status-dot" id="heroStatus" title="discord status"></span>
-            </div>
-            <div class="profile__who">
-              <div class="profile__name"><span id="rbxDisplay">finalarc</span><svg class="verified" id="rbxVerified" viewBox="0 0 24 24" hidden><path d="M12 2l2.4 1.8 3-.2 1 2.8 2.6 1.6-.7 2.9 1.2 2.8-2.2 2 .1 3-2.9.8-1.5 2.6-2.9-.8L12 22l-2.1-2.1-2.9.8-1.5-2.6-2.9-.8.1-3-2.2-2 1.2-2.8-.7-2.9L3.6 5l1-2.8 3 .2z" fill="currentColor"/><path d="M8 12.2l2.6 2.6L16.2 9" fill="none" stroke="#060608" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-              <div class="profile__handle mono">@<span id="rbxUser">…</span></div>
-            </div>
-          </div>
-          <p class="profile__bio" id="rbxBio">loading the story…</p>
-          <div class="profile__chips mono">
-            <span class="chip"><i>joined</i><b id="chipJoined">—</b></span>
-            <span class="chip"><i>age</i><b id="chipAge">—</b></span>
-            <span class="chip"><i>badges</i><b id="chipBadges">—</b></span>
-          </div>
-          <div class="profile__links">
-            <a class="btn btn--solid" id="rbxLink" href="https://www.roblox.com/users/461323235/profile" target="_blank" rel="noopener" data-cursor="open" data-magnetic>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.2 2 2 18.8 18.8 22 22 5.2zm8.6 12.8-4.6-1 1-4.6 4.6 1z" fill="currentColor"/></svg>
-              roblox
-            </a>
-            <button class="btn" type="button" data-copy="finalarcuser" data-cursor="copy" data-magnetic>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.6 5.4A17 17 0 0 0 15.4 4l-.5 1a15.6 15.6 0 0 0-5.8 0l-.5-1a17 17 0 0 0-4.2 1.4C1.7 9.4 1 13.3 1.3 17.2a17 17 0 0 0 5.2 2.6l1.1-1.8a11 11 0 0 1-1.7-.8l.4-.3a12.2 12.2 0 0 0 11.4 0l.4.3a11 11 0 0 1-1.7.8l1.1 1.8a17 17 0 0 0 5.2-2.6c.4-4.5-.7-8.4-3.1-11.8zM8.7 14.8c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1zm6.6 0c-1 0-1.9-1-1.9-2.1s.8-2.1 1.9-2.1 1.9 1 1.9 2.1-.8 2.1-1.9 2.1z" fill="currentColor"/></svg>
-              <span class="btn__txt">finalarcuser</span>
-            </button>
-          </div>
-        </article>
-
-        <div class="hero__meta mono" data-reveal>
-          <div class="meta-row"><i>roblox id</i><b>461323235</b></div>
-          <div class="meta-row"><i>discord</i><b>finalarcuser</b></div>
-          <div class="meta-row"><i>status</i><b id="heroStatusTxt">checking…</b></div>
-          <div class="meta-row"><i>local time</i><b id="clock2">--:--</b></div>
-        </div>
-      </div>
-
-      <div class="hero__scroll mono" aria-hidden="true"><span>scroll</span><i></i></div>
-    </section>
-
-    <!-- 02 MANIFESTO -->
-    <section class="scene manifesto" data-scene="manifesto" data-label="01 / about">
-      <div class="sticky">
-        <div class="manifesto__eyebrow mono"><span class="idx">01</span> the profile</div>
-        <p class="manifesto__text" id="manifesto">Not a template. Not a link dump. One profile, wired straight into live Roblox and Discord data — built for a single user and designed to move every time you scroll.</p>
-        <svg class="manifesto__arc" viewBox="0 0 600 300" aria-hidden="true"><path id="arcPath" d="M30 290a270 270 0 0 1 540 0" fill="none"/><path class="manifesto__arc-line" d="M30 290a270 270 0 0 1 540 0" fill="none"/></svg>
-      </div>
-    </section>
-
-    <!-- 03 STATS (horizontal) -->
-    <section class="scene stats" id="stats" data-scene="stats" data-label="02 / stats">
-      <div class="sticky">
-        <div class="stats__track" id="statsTrack">
-          <div class="stats__intro">
-            <div class="mono eyebrow"><span class="idx">02</span> roblox, by the numbers</div>
-            <h2 class="display">the <em class="serif">numbers</em><br>don't lie.</h2>
-            <p class="lede">Pulled live from Roblox the moment you landed here. Keep scrolling →</p>
-          </div>
-          <article class="stat card" data-stat="age"><div class="stat__k mono">account age</div><div class="stat__v"><span data-num id="sAge">0</span><small>days</small></div><div class="stat__f mono" id="sAgeF">—</div><div class="stat__bar"><span id="sAgeBar"></span></div></article>
-          <article class="stat card" data-stat="friends"><div class="stat__k mono">friends</div><div class="stat__v"><span data-num id="sFriends">0</span></div><div class="stat__f mono">mutual connections</div></article>
-          <article class="stat card" data-stat="followers"><div class="stat__k mono">followers</div><div class="stat__v"><span data-num id="sFollowers">0</span></div><div class="stat__f mono" id="sRatio">—</div></article>
-          <article class="stat card" data-stat="following"><div class="stat__k mono">following</div><div class="stat__v"><span data-num id="sFollowing">0</span></div><div class="stat__f mono">accounts watched</div></article>
-          <article class="stat card" data-stat="badges"><div class="stat__k mono">badges earned</div><div class="stat__v"><span data-num id="sBadges">0</span><small id="sBadgesPlus"></small></div><div class="stat__f mono" id="sBadgeRate">—</div></article>
-          <article class="stat card" data-stat="groups"><div class="stat__k mono">groups</div><div class="stat__v"><span data-num id="sGroups">0</span></div><div class="stat__f mono" id="sTopGroup">—</div></article>
-          <article class="stat card stat--hot" data-stat="peak"><div class="stat__k mono">peak players <span class="tag">og game</span></div><div class="stat__v"><span data-num id="sPeak" data-to="497">0</span><small>ccu</small></div><div class="stat__f mono">concurrent, before the takedown</div></article>
-          <article class="stat card stat--hot" data-stat="lifetime"><div class="stat__k mono">lifetime visits <span class="tag">og game</span></div><div class="stat__v"><span data-num id="sLifetime" data-to="500000">0</span><small>+</small></div><div class="stat__f mono">gone in one moderation call</div></article>
-          <article class="stat card" data-stat="visits"><div class="stat__k mono">live visits</div><div class="stat__v"><span data-num id="sVisits">0</span></div><div class="stat__f mono" id="sGames">—</div></article>
-          <article class="stat card" data-stat="names"><div class="stat__k mono">past usernames</div><div class="stat__v"><span data-num id="sNames">0</span></div><div class="stat__f mono" id="sNamesF">—</div></article>
-          <div class="stats__end display"><em class="serif">and</em> counting.</div>
-        </div>
-        <div class="stats__hud mono"><span id="statsIdx">01</span><i><b id="statsBar"></b></i><span id="statsTotal">10</span></div>
-      </div>
-    </section>
-
-    <!-- 04 THE GAME (saga) -->
-    <section class="scene saga" id="game" data-scene="saga" data-label="03 / the game">
-      <div class="sticky">
-        <div class="saga__drips" id="drips" aria-hidden="true"></div>
-        <div class="saga__chart" id="sagaChart" role="img" aria-label="Players online over time: climbing to a peak of 497 concurrent players, cut straight to zero by the takedown, then a smaller climb after the reupload."></div>
-        <div class="saga__splats" id="splats" aria-hidden="true"></div>
-
-        <div class="saga__chap" data-ch="0">
-          <div class="mono eyebrow"><span class="idx">03</span> chapter i — the rise</div>
-          <h2 class="display">it <em class="serif">blew up.</em></h2>
-          <div class="saga__nums">
-            <div><b data-num data-to="497">0</b><i class="mono">peak concurrent players</i></div>
-            <div><b data-num data-to="500000" data-compact>0</b><i class="mono">visits</i></div>
-          </div>
-        </div>
-
-        <div class="saga__chap" data-ch="1">
-          <div class="mono eyebrow"><span class="idx">03</span> chapter ii — the sign</div>
-          <h2 class="display">one <em class="serif">sign.</em></h2>
-          <div class="saga__sign" aria-label="the in-game sign">
-            <div class="saga__sign-board">
-              <span class="mono">notice</span>
-              <strong>find a bug →<br>earn robux</strong>
-            </div>
-            <div class="saga__sign-post"></div>
-          </div>
-          <p class="lede">A single in-game sign offered Robux rewards for reporting bugs. Roblox read it as a rule break.</p>
-        </div>
-
-        <div class="saga__chap saga__chap--fall" data-ch="2">
-          <div class="mono eyebrow"><span class="idx">03</span> chapter iii — the fall</div>
-          <div class="saga__stamp" data-text="TAKEN DOWN">TAKEN DOWN</div>
-          <p class="saga__epitaph"><b>497</b> players. <b>500,000</b> visits. <em class="serif">butchered overnight.</em></p>
-        </div>
-
-        <div class="saga__chap" data-ch="3">
-          <div class="mono eyebrow"><span class="idx">03</span> chapter iv — the reupload</div>
-          <h2 class="display">back, <em class="serif">quieter.</em></h2>
-          <p class="lede">Rebuilt and reuploaded. It hasn't hit the old numbers yet, but the people who built it once are still building. <span class="saga__live mono" id="reVisits"></span></p>
-        </div>
-
-        <div class="saga__hud mono" aria-hidden="true">
-          <span data-hud="0">i · rise</span><span data-hud="1">ii · sign</span><span data-hud="2">iii · fall</span><span data-hud="3">iv · reupload</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- 05 AVATAR -->
-    <section class="scene avatar" id="avatar" data-scene="avatar" data-label="04 / avatar">
-      <div class="sticky">
-        <div class="avatar__bgword outline" aria-hidden="true">AVATAR</div>
-        <svg class="avatar__ring" viewBox="0 0 500 500" aria-hidden="true">
-          <defs><path id="ringPath" d="M250 250m-210 0a210 210 0 1 1 420 0a210 210 0 1 1-420 0"/></defs>
-          <text><textPath href="#ringPath" id="ringText">FINALARC ✦ ROBLOX ✦ DISCORD ✦ FINALARCUSER ✦ LIVE PROFILE ✦ </textPath></text>
-        </svg>
-        <div class="avatar__stage">
-          <div class="avatar__halo"></div>
-          <img id="rbxAvatar" alt="Roblox avatar" decoding="async">
-          <div class="avatar__floor"></div>
-        </div>
-        <div class="avatar__cap avatar__cap--l">
-          <div class="mono eyebrow"><span class="idx">04</span> the fit</div>
-          <h2 class="display">current<br><em class="serif">avatar</em></h2>
-        </div>
-        <div class="avatar__cap avatar__cap--r mono" id="avatarMeta">
-          <div class="meta-row"><i>display</i><b id="aDisplay">—</b></div>
-          <div class="meta-row"><i>username</i><b id="aUser">—</b></div>
-          <div class="meta-row"><i>created</i><b id="aCreated">—</b></div>
-          <div class="meta-row"><i>weekday</i><b id="aWeekday">—</b></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 06 CLOSET -->
-    <section class="closet" id="closet" data-label="05 / closet">
-      <div class="wrap">
-        <div class="closet__head">
-          <div>
-            <div class="mono eyebrow" data-reveal><span class="idx">05</span> the closet</div>
-            <h2 class="display" data-split="words">the drip.</h2>
-          </div>
-          <div class="closet__total" data-reveal>
-            <div class="mono">worn value, listed pieces</div>
-            <div class="closet__sum"><span class="rbx">R$</span><span id="closetTotal" data-num data-to="0">0</span><sup>+</sup></div>
-            <div class="mono closet__usd" id="closetUsd"></div>
-          </div>
-        </div>
-        <div class="items" id="items"></div>
-        <p class="closet__note mono" data-reveal>just a few of the assets to the name. prices are approximate.</p>
-        <div class="wearing" id="wearingWrap" hidden>
-          <div class="mono eyebrow"><span class="idx">↳</span> on the avatar right now</div>
-          <div class="wearing__row" id="wearing"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 07 INSIGHTS -->
-    <section class="insights" data-label="06 / insights">
-      <div class="wrap">
-        <div class="mono eyebrow" data-reveal><span class="idx">06</span> read between the stats</div>
-        <h2 class="display" data-split="words">insights.</h2>
-        <ol class="insights__list" id="insightsList">
-          <li class="insight" data-reveal><span class="insight__n mono">i</span><p>Crunching the numbers…</p></li>
-        </ol>
-      </div>
-    </section>
-
-    <!-- 08 VAULT -->
-    <section class="vault" id="vault" data-label="07 / vault">
-      <div class="wrap">
-        <div class="vault__head">
-          <div>
-            <div class="mono eyebrow" data-reveal><span class="idx">07</span> the vault</div>
-            <h2 class="display" data-split="words">recent badges</h2>
-          </div>
-          <p class="lede" data-reveal>The latest badges earned across Roblox experiences. Hover to inspect.</p>
-        </div>
-        <div class="badges" id="badges"></div>
-
-        <div class="vault__head vault__head--groups">
-          <h2 class="display" data-split="words">groups</h2>
-          <p class="lede" data-reveal>Communities and the rank held in each.</p>
-        </div>
-        <ul class="groups" id="groups"></ul>
-      </div>
-    </section>
-
-    <!-- 09 NOW PLAYING -->
-    <section class="stage" id="stage" data-label="08 / now playing">
-      <div class="stage__bg" aria-hidden="true"><img src="audio/cover.jpg" alt="" decoding="async" loading="lazy"></div>
-      <div class="wrap stage__wrap">
-        <div class="stage__head">
-          <div class="mono eyebrow"><span class="idx">08</span> now playing</div>
-          <div class="stage__live mono" aria-hidden="true"><i></i>live from the track</div>
-        </div>
-        <div class="stage__meter" id="stageMeterWrap"><canvas id="stageMeter" aria-hidden="true"></canvas></div>
-        <dl class="stage__readouts mono">
-          <div><dt>level</dt><dd><b id="stageDb">−∞</b> dBFS</dd></div>
-          <div><dt>peak</dt><dd><b id="stagePeak">−∞</b> dBFS</dd></div>
-          <div><dt>bar</dt><dd><b id="stageBar">1.1</b> / 144</dd></div>
-          <div><dt>section</dt><dd><b id="stageSec">paused</b></dd></div>
-          <div><dt>time</dt><dd><b id="stageTime">0:00</b> / 4:25</dd></div>
-        </dl>
-        <h2 class="stage__title" aria-label="aloneagain by NIVEK FFORHS"><span class="stage__word" aria-hidden="true">alone</span><em class="serif" aria-hidden="true">again</em></h2>
-        <div class="stage__meta mono"><span><span class="artist">NIVEK FFORHS</span> · 132 bpm</span><button class="btn btn--solid stage__play" id="stagePlay" type="button">play the track</button></div>
-      </div>
-    </section>
-
-    <!-- 10 DISCORD -->
-    <section class="discord" id="discord" data-label="09 / discord">
-      <div class="wrap">
-        <div class="mono eyebrow" data-reveal><span class="idx">09</span> find me on discord</div>
-        <h2 class="display discord__title" data-split="words">say hi.</h2>
-
-        <div class="dc-duo" id="dcDuo"></div>
-      </div>
-    </section>
-
-    <!-- 11 FOOTER -->
-    <footer class="foot" data-label="10 / end">
-      <div class="marquee" aria-hidden="true"><div class="marquee__inner" id="marquee"><span>FINALARC</span><i>✦</i><span class="outline">FINALARC</span><i>✦</i><span>FINALARC</span><i>✦</i><span class="outline">FINALARC</span><i>✦</i></div></div>
-      <div class="foot__row wrap mono">
-        <span>© <span id="year">2026</span> finalarc</span>
-        <span class="foot__links">
-          <a href="https://www.roblox.com/users/461323235/profile" target="_blank" rel="noopener" data-cursor="open">roblox ↗</a>
-          <a href="https://discord.com/users/1453897439043125350" target="_blank" rel="noopener" data-cursor="open">discord ↗</a>
-          <a href="#top" data-cursor="top">top ↑</a>
-        </span>
-        <span id="updated">live data</span>
-      </div>
-    </footer>
-  </main>
-
-  <!-- the show: drop fx -->
-  <div class="fx" aria-hidden="true">
-    <div class="fx__black"><svg class="fx__flat" viewBox="0 0 1000 100" preserveAspectRatio="none"><path pathLength="1" d="M0 50H452l10-14 12 34 12-44 9 24h505"/></svg></div>
-    <canvas class="fx__3d" id="stage3d"></canvas>
-    <div class="fx__labels" id="labels3d"></div>
-    <canvas class="fx__blood" id="bloodfx"></canvas>
-    <div class="fx__box fx__box--t"><span class="fx__cap mono" id="capTop"></span></div>
-    <div class="fx__box fx__box--b"><span class="fx__cap mono" id="capBot"></span></div>
-    <div class="fx__vhs"><span class="fx__osd mono">◀◀ rew</span><span class="fx__tc mono" id="vhsTc"></span></div>
-    <div class="fx__flash"></div>
+  <div class="gate-corner l"><span class="spin"></span><span id="gateStatus">Joining server…</span></div>
+  <div class="gate-corner r np">
+    <div><div class="t">aloneagain</div><div class="a">NIVEK FFORHS</div></div>
+    <img src="audio/cover.jpg" alt="">
   </div>
+</div>
 
-  <!-- the deck: player + meter -->
-  <aside class="deck" id="deck" aria-label="Music player">
-    <div class="deck__meter" id="deckMeterWrap"><canvas id="deckMeter" aria-hidden="true"></canvas></div>
-    <div class="deck__body">
-      <div class="deck__top">
-        <img class="deck__cover" src="audio/cover.jpg" alt="" width="38" height="38" decoding="async">
-        <div class="deck__track"><b>aloneagain</b><span class="mono artist">NIVEK FFORHS</span></div>
-        <div class="deck__db mono"><b id="deckDb">−∞</b><i>dBFS</i></div>
-      </div>
-      <div class="deck__scrub" id="deckScrub" role="slider" tabindex="0" aria-label="Seek through the track" aria-valuemin="0" aria-valuemax="265" aria-valuenow="0" aria-valuetext="0:00">
-        <canvas class="deck__wave" id="deckWave" aria-hidden="true"></canvas>
-        <canvas class="deck__wave deck__wave--on" id="deckWaveOn" aria-hidden="true"></canvas>
-        <span class="deck__head" id="deckHead" aria-hidden="true"></span>
-      </div>
-      <div class="deck__bot">
-        <button class="deck__btn deck__play" id="deckPlay" type="button" aria-label="Play">
-          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>
-          <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z" fill="currentColor"/></svg>
-          <svg class="i-replay" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z" fill="currentColor"/></svg>
-        </button>
-        <button class="deck__auto" id="deckAuto" type="button" aria-pressed="true"><i aria-hidden="true"></i><span>autopilot</span></button>
-        <span class="deck__sec mono" id="deckSec" aria-live="off">paused</span>
-        <span class="deck__time mono"><span id="deckTime">0:00</span><i>/</i>4:25</span>
-        <button class="deck__btn deck__mute" id="deckMute" type="button" aria-label="Mute">
-          <svg class="i-vol" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          <svg class="i-mute" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        </button>
-      </div>
+<!-- Roblox-style top bar -->
+<div class="hud hud-tl">
+  <button id="chatBtn" type="button" aria-label="Hide chat bubbles" aria-pressed="true" data-tip="Chat"><svg class="ic" viewBox="0 0 24 24"><path d="M20.5 11.5c0 4.1-3.8 7.5-8.5 7.5-1.1 0-2.2-.2-3.2-.5L4 20l1.3-3.6C4.2 15 3.5 13.3 3.5 11.5 3.5 7.4 7.3 4 12 4s8.5 3.4 8.5 7.5z"/></svg></button>
+  <button id="muteBtn" type="button" aria-label="Mute" data-tip="Mute (M)"><svg class="ic" viewBox="0 0 24 24"><path d="M11 5 6.5 9H3.5v6h3L11 19V5z"/><path class="w1" d="M15.5 9a4.5 4.5 0 0 1 0 6"/><path class="w2" d="M18.5 6.5a8 8 0 0 1 0 11"/><path class="x" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
+</div>
+<div class="hud hud-tr">
+  <span class="live"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>
+  <span><b id="clock">--:--</b> <span id="clockTz">local time</span></span>
+</div>
+
+<main class="scene">
+  <article class="card" id="card">
+    <div class="card-sheen"></div>
+    <div class="card-body">
+
+      <!-- avatar: the official Roblox full-body render, or the real 3D avatar once it's baked -->
+      <section class="stage" aria-label="Avatar">
+        <div class="stage-floor"><i></i></div>
+        <div class="stage-top">
+          <span class="label">Avatar</span>
+          <span class="toggle3d" id="toggle3d" role="group" aria-label="Avatar view" hidden>
+            <button type="button" data-mode="2d">2D</button><button type="button" data-mode="3d" class="on">3D</button>
+          </span>
+        </div>
+        <div class="stage-cone"></div>
+        <div class="floor-ring"></div>
+        <div class="floor-shadow"></div>
+        <div class="render-wrap" id="renderWrap">
+          <img id="render" alt="finalarc's Roblox avatar" decoding="async">
+          <canvas id="avatar3d" hidden></canvas>
+          <div class="bubbles" id="bubbles" aria-live="polite"></div>
+        </div>
+        <div class="wearing" id="wearingWrap">
+          <div class="wearing-h"><span class="label">Currently Wearing</span><span class="count" id="wearCount"></span></div>
+          <div class="tiles" id="tiles"></div>
+        </div>
+      </section>
+
+      <section class="info">
+        <div class="id">
+          <div class="pfp">
+            <div class="pfp-ring"></div>
+            <div class="pfp-img"><img id="headshot" alt="" decoding="async"></div>
+            <span class="presence" id="presence" data-tip="Offline" hidden></span>
+          </div>
+          <div class="id-text">
+            <div class="name-row">
+              <h1 class="name" id="displayName" data-text="finalarc">finalarc<i class="spk s1"></i><i class="spk s2"></i><i class="spk s3"></i></h1>
+              <svg class="seal" id="seal" viewBox="0 0 24 24" data-tip="Verified" hidden><path class="seal-path" fill="#3d74ff"/><path d="M7.6 12.3l3 3 5.8-6.2" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <div class="badges" id="badges"></div>
+            </div>
+            <div class="sub">
+              <span class="at" id="username">@finalarc</span><span class="dot-sep"></span>
+              <span class="pres-text" id="presText"><i></i><span>checking presence…</span></span>
+            </div>
+            <div class="meta" id="meta"></div>
+          </div>
+        </div>
+        <div class="meta m-meta" id="metaPhone"></div>
+
+        <!-- leaderstats: the Roblox player list -->
+        <div class="sec s-stats">
+          <div class="sec-h"><span class="label">Leaderstats</span><span class="aside" id="statsLive"><i class="livedot"></i>live from Roblox</span></div>
+          <div class="plist">
+            <div class="plist-row plist-head"><span>People</span><span>Friends</span><span>Followers</span><span>Following</span><span>Badges</span><span>Groups</span></div>
+            <div class="plist-row plist-me">
+              <span class="who"><img id="plHead" alt="" decoding="async"><span id="plName">finalarc</span></span>
+              <span class="v" id="sFriends">—</span><span class="v" id="sFollowers">—</span><span class="v" id="sFollowing">—</span><span class="v" id="sBadges">—</span><span class="v" id="sGroups">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- the game Roblox took down -->
+        <div class="sec s-exp">
+          <div class="exp">
+            <div class="exp-thumb"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg></div>
+            <div class="exp-main">
+              <span class="exp-tag"><i></i>Moderated</span>
+              <div class="exp-title">[ Content Deleted ]</div>
+              <div class="exp-stats"><b id="gPeak">497</b> peak players · <b id="gVisits">500K+</b> visits</div>
+              <div class="exp-cta">
+                <a class="btn btn-play" id="playReupload" href="#" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M8 5.6v12.8c0 .8.9 1.3 1.6.8l10-6.4c.6-.4.6-1.2 0-1.6l-10-6.4C8.9 4.3 8 4.8 8 5.6z"/></svg>Play reupload</a>
+                <span class="note" id="reNote">taken down overnight</span>
+              </div>
+            </div>
+            <div class="spark" id="spark" role="img" aria-label="Players online: climbing to a peak of 497, cut to zero by the takedown, then the reupload climbing again."></div>
+          </div>
+        </div>
+
+        <!-- Discord, via Lanyard -->
+        <div class="sec s-dc">
+          <div class="sec-h"><span class="label">Discord</span><span class="aside">via Lanyard</span></div>
+          <div class="dc-grid" id="dcGrid"></div>
+        </div>
+
+        <div class="actions" id="actions">
+          <a class="btn-friend" id="friendBtn" href="#" target="_blank" rel="noopener"><svg class="ic" viewBox="0 0 24 24"><circle cx="9.5" cy="8" r="3.8"/><path d="M2.8 20.5a6.7 6.7 0 0 1 13.4 0"/><path d="M19 8v6M16 11h6"/></svg>Add Friend</a>
+          <span class="socials" id="socials"></span>
+          <span class="spacer"></span>
+          <a class="copy" id="viewRoblox" href="#" target="_blank" rel="noopener">View on Roblox<svg class="ic" viewBox="0 0 24 24"><path d="M7 17 17 7M9 7h8v8"/></svg></a>
+        </div>
+
+        <!-- the song -->
+        <div class="player" id="player">
+          <div class="cover"><img src="audio/cover.jpg" alt="aloneagain cover art"></div>
+          <div class="track">
+            <div class="track-t">aloneagain</div>
+            <div class="track-a">NIVEK FFORHS<span class="bpm"> · 132 BPM</span></div>
+          </div>
+          <div class="wave-wrap">
+            <span class="time" id="tNow">0:00</span>
+            <div class="wave" id="wave" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="265" aria-valuenow="0" aria-valuetext="0:00"><span class="drop-mark" id="dropMark"></span></div>
+            <span class="time r" id="tDur">4:25</span>
+          </div>
+          <div class="ctrls">
+            <button class="sm prev" id="prevBtn" type="button" aria-label="Back to the start" data-tip="Restart"><svg viewBox="0 0 24 24"><path d="M6 5.5h2v13H6zM19 6.2v11.6c0 .8-.9 1.3-1.6.8l-8.2-5.8a1 1 0 0 1 0-1.6l8.2-5.8c.7-.5 1.6 0 1.6.8z"/></svg></button>
+            <button class="pp" id="ppBtn" type="button" aria-label="Play"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.6v12.8c0 .8.9 1.3 1.6.8l10-6.4c.6-.4.6-1.2 0-1.6l-10-6.4C8.9 4.3 8 4.8 8 5.6z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg></button>
+            <button class="sm next" id="nextBtn" type="button" aria-label="Skip to the drop" data-tip="Skip to the drop"><svg viewBox="0 0 24 24"><path d="M16 5.5h2v13h-2zM5 6.2v11.6c0 .8.9 1.3 1.6.8l8.2-5.8a1 1 0 0 0 0-1.6L6.6 5.4C5.9 4.9 5 5.4 5 6.2z"/></svg></button>
+          </div>
+          <div class="vol">
+            <svg class="ic" viewBox="0 0 24 24"><path d="M11 5 6.5 9H3.5v6h3L11 19V5z"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6"/></svg>
+            <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8" aria-label="Volume">
+          </div>
+        </div>
+      </section>
     </div>
-  </aside>
+  </article>
+</main>
 
-  <div class="toast mono" id="toast" role="status" aria-live="polite"></div>
+<div class="tape tape-front" aria-hidden="true"><div class="tape-track" data-text="[ Content Deleted ]"></div></div>
+<canvas id="blood" aria-hidden="true"></canvas>
+<div class="flash" aria-hidden="true"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="audio/song.js" defer></script>
-  <script src="meter.js" defer></script>
-  <script src="main.js" defer></script>
-  <script src="show.js" defer></script>
-  <script src="stage3d.js" type="module"></script>
+<script src="audio/song.js"></script>
+<script src="main.js"></script>
+<script src="audio.js"></script>
+<script src="app.js"></script>
+<script type="module" src="avatar3d.js"></script>
 </body>
 </html>

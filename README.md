@@ -1,90 +1,97 @@
 # finalarc
 
-A personal profile site (a custom guns.lol-style page) with live Roblox stats and Discord presence, scored to a track.
-It is plain HTML/CSS/JS with no build step. The only library is three.js, vendored in `vendor/`.
+A one-screen Roblox profile in the style of guns.lol: live Roblox stats, both Discord accounts, the game Roblox took down, and your avatar. It's scored to a track.
+It is plain HTML/CSS/JS with no build step. The only library is three.js, vendored in `vendor/`, and it's used only for the 3D avatar.
 
 ## Run it
 
-Serve the folder with anything that supports HTTP range requests (needed to seek in the MP3):
+Serve the folder with anything that supports HTTP range requests:
 
 ```sh
 npx http-server -c-1 .
 ```
 
-`python3 -m http.server` also works, but it can't seek, so scrubbing in the player jumps back to 0:00. Opening `index.html` straight from disk plays the music, but the meters use the precomputed song map instead of the live analyser.
-
 ### Host on GitHub Pages
-Go to repo **Settings → Pages**, set **Source: Deploy from a branch**, then pick the branch and the `/ (root)` folder. Pages supports range requests, so everything works there.
+Go to the repo's **Settings → Pages**, set **Source: Deploy from a branch**, then pick the branch and the `/ (root)` folder.
 
-## The show
+## What's on it
 
-Everything loads behind the gate first: the whole track, every image, the fonts, the 3D engine and the avatar. Shaders are compiled and the camera runs through every section once before the gate opens, so nothing loads mid-show.
+- **Joining screen**: built like a Roblox "joining experience" screen. Behind it, everything loads with real progress: the whole song, your avatar renders and items, fonts, and the 3D avatar if it's baked. Click to join and the song starts. "Join without sound" is there too.
+- **The card**:
+  - Your Roblox headshot, display name, verified seal (only if you're verified) and badges.
+  - Your Roblox presence (In Studio, in game, online), falling back to your Discord status.
+  - Join date and years on Roblox.
+  - A Roblox player list ("leaderstats") with friends, followers, following, badges and groups.
+- **The avatar**:
+  - Your official Roblox full-body render, or your real 3D avatar once it's baked (see below).
+  - It types your bio in Roblox bubble chat.
+  - Under it, the items you're wearing right now, each linking to the catalog.
+- **The game**: "[ Content Deleted ]", moderated. It shows the 497 peak and 500K visits, a chart that climbs to the peak and gets cut to zero, and a Play button for the reupload.
+- **Discord**: main and alt, live from Lanyard, with status, Spotify (album art and progress) or the game you're playing.
+- **The player**: the waveform is drawn from the song's real loudness. Click or drag it to seek. There's a marker at the 0:29 drop, a skip-to-the-drop button, volume, and media keys.
+- **The drop (0:29)**:
+  - A white flash, a shake and blood across the screen.
+  - "[ CONTENT DELETED ]" moderation tape, and the whole scene goes red.
+  - The chat bubble says "cold." and your 3D avatar flips Roblox off with both hands.
+  - The red holds until the track settles at 0:43. Drop ii (2:25) hits, and drop iii (3:23) brings the tape back.
 
-Click **click to enter** and the site plays *aloneagain* by NIVEK FFORHS and drives itself in time with it. Your Roblox avatar is in it too, in 3D:
+Keys: `Space` play/pause, `M` mute, `←`/`→` on the waveform to seek.
 
-| Time | Bar | What happens |
-| --- | --- | --- |
-| 0:00 | 1 | Your avatar drops in with a spawn forcefield. Every time the intro stops dead, the page and the avatar freeze with it, then it snaps into a new pose: point, flex, T-pose, the finger. |
-| 0:07.27 | 5 | It hops onto the player and sits there through the manifesto. |
-| 0:14.55 | 9 | The 808s come in: the stats fly past, a card on every beat, while your avatar sprints along them. |
-| 0:21.82 | 13 | Chapter i: your avatar rides the player chart up to its 497 peak. |
-| 0:25.46 | 15 | Chapter ii: the **ban hammer** shows up and winds up. Letterbox closes, countdown to the drop. |
-| 0:28.65 | — | The track goes silent: blackout, flatline, the hammer frozen over your head. |
-| **0:29.09** | **17** | **The drop: the hammer slams you off the screen. TAKEN DOWN, blood, bricks everywhere. You respawn and flip Roblox off, with one clone or noob joining on every beat.** |
-| 0:43.64 | 25 | The reupload. Then the avatar scene (in 3D if you've baked your mesh, see below) and the closet. |
-| 1:27.27 | 49 | The hook: a calmer glide through insights and the vault, your avatar chilling on the player. |
-| 2:25.46 | 81 | Drop ii: **now playing**, the full-screen meter, a row of headbangers. |
-| 3:09.09 | 105 | Discord. |
-| 3:21.82 | 112 | The bass cuts out: VHS rewind to the top, moonwalking. |
-| 3:23.64 | 113 | Drop iii: FINAL ARC slams back in, then a hard cut every 2 bars through the whole site, the army in a new spot each cut. The hammer comes back once. |
-| 4:21.82 | 145 | Outro: oof. Your avatar falls apart into bricks, then respawns to say gg. |
+## Your real avatar in 3D
 
-Everything also reacts live: the background arc is a 64-band spectrum of the track, it pulses with the kicks and tightens through each run-up. The corner player (the "deck") has a real VU needle that overshoots, pegs and bounces, an LED spectrum with falling peak caps, and a scrubber showing the whole song.
+Roblox only gives out the 3D avatar file to logged-in or API-key requests, and its CDN blocks other sites, so the page can't fetch it live. Bake it into the repo once with the included GitHub Action:
 
-**Autopilot is on by default and it owns the camera.** The camera is a virtual one: the page is moved by transform along a smooth spline through the song, not by scrolling, so it never steps. Scrolling is locked while it drives. To take over, click **autopilot** in the player **twice**, or press `A` twice. That pauses everything and tells you: *ruins your experience with it off gng but you do you*. One click turns it back on where the song left off. `M` mutes. Visitors can also enter without sound, which starts with autopilot off. With *reduce motion* on, nothing scrolls by itself. When autopilot is off, your avatar chills: it idles in the hero, models the fit in the avatar scene, and sits on the player.
+1. **Make a Roblox API key.**
+   - Go to [create.roblox.com/dashboard/credentials](https://create.roblox.com/dashboard/credentials) → **Create API key**.
+   - Name it, e.g. `finalarc avatar`.
+   - Under **Access permissions**, add the **Thumbnails** API with **Read** (the `thumbnail:read` scope).
+   - Under **Security**, add the IP address `0.0.0.0/0` so GitHub can use it.
+   - Create the key and copy it.
+2. **Add it to the repo.** Go to GitHub → this repo → **Settings → Secrets and variables → Actions → New repository secret**. Set the name to `ROBLOX_API_KEY` and paste the key as the value.
+3. **Run the bake.**
+   - Open the **Actions** tab → **Bake avatar**.
+   - Open the latest run and click **Re-run all jobs**.
+   - On the default branch you can use **Run workflow** instead.
+   - It commits an `avatar/` folder with your exact mesh, clothes and accessories.
 
-If the device can't keep up, quality steps down by itself (background resolution, 3D pixel ratio, army size, debris).
+Once it's baked, the avatar panel shows a **2D / 3D** switch.
+- In 3D your avatar idles, bobs to the beat and looks at the cursor.
+- It waves when you click it. You can drag it to spin it.
+- It flips Roblox off at the drop and headbangs through it.
 
-### Files
+Re-run the bake whenever you change your fit. It also re-runs on Mondays (on the default branch only).
 
-| File | What it is |
-| --- | --- |
-| `audio/aloneagain.mp3`, `audio/cover.jpg` | The track and its cover art. |
-| `audio/song.js` | The song map: the 132 bpm grid, sections, the 13 silences, 565 kicks, 563 snares, 603 hats and loudness envelopes, measured from the MP3. |
-| `show.js` | Audio engine, song clock, the autopilot director (its path is `NODES`, its one-shot cues `CUES`), the drop effects, the deck and the stage. |
-| `stage3d.js` | The 3D world: your avatar, its moves on the timeline (`HERO`), the chat lines (`LINES`), the army, the ban hammer, the forcefields, bricks and oof. |
-| `rig.js` | The R6 skeleton every character shares, the blocky fallback avatar, the real-mesh rigger and the clips (idle, run, flip, headbang …). |
-| `vendor/` | three.js 0.160 (MIT) and the loaders it needs. |
-| `tools/fetch-avatar.mjs` | Bakes your real 3D avatar into `avatar/` (see below). |
-| `meter.js` | The arc meter (deck and stage). |
-| `tools/songmap.py` | Regenerates `audio/song.js`: `python3 tools/songmap.py audio/aloneagain.mp3 audio/song.js` (needs ffmpeg, numpy, scipy). |
+Prefer your own computer? Run `ROBLOX_API_KEY=... node tools/fetch-avatar.mjs` (Node 18+), then commit `avatar/`. Never commit the key itself.
 
-To move the camera, change a node's time in `NODES` in `show.js`. To change what the avatar does, edit `HERO` in `stage3d.js`. To use a different song, set its tempo, drop and sections at the top of `tools/songmap.py`, re-run it, then retime `KEYS`.
+## Customize
 
-The site is public, so the track can draw a copyright takedown. A song you have rights to is the safe choice.
+Everything personal is in the `CONFIG` block at the top of `main.js`:
+- your Roblox id and both Discord accounts
+- the taken-down game's numbers, plus `reuploadPlaceId` if the Play button should open a specific place
+- the bio lines the avatar types
+- your location
+- `timezone`, which shows your local time in the corner
+- `socials`, extra links next to Add Friend (YouTube, TikTok, Spotify, X, Instagram, Twitch, GitHub or any link)
+
+Colours are the `:root` tokens in `styles.css`.
 
 ## Live data
 
 | Source | How |
 | --- | --- |
-| Roblox (profile, avatar, friends, followers, badges, groups, games, past names) | Public Roblox APIs through the `roproxy.com` CORS mirror. If that fails, it falls back to `corsproxy.io` and then `allorigins`. Results are cached in the browser for 10 min. |
-| Discord: main + alt (status, avatar, custom status, game, Spotify) | [Lanyard](https://github.com/Phineas/lanyard). Both accounts need to be in the Lanyard Discord server (https://discord.gg/lanyard). Until they are, the cards show a static fallback. |
+| Roblox: profile, renders, stats, presence, items, games | Public Roblox APIs through the `roproxy.com` CORS mirror. If that fails, it falls back to `corsproxy.io` and then `allorigins`. Results are cached in the browser for 10 min. |
+| Discord: main + alt (status, avatar, Spotify, game) | [Lanyard](https://github.com/Phineas/lanyard). Both accounts need to be in the Lanyard Discord server (https://discord.gg/lanyard). |
 
-The game chart in chapter iii is a reconstruction. Its shape is illustrative, but the 497-player peak is the real number.
+## Files
 
-## Your avatar in 3D
+| File | What it is |
+| --- | --- |
+| `index.html`, `styles.css` | The page. |
+| `main.js` | `CONFIG`, the preload registry and the live data (Roblox, Lanyard). |
+| `app.js` | Everything you see and touch: the joining screen, the card, the chat bubbles, the player, snow, tilt and the drop. |
+| `audio.js` | The song: it's downloaded fully before you join, played through Web Audio, with a beat-accurate clock. |
+| `audio/aloneagain.mp3`, `audio/cover.jpg`, `audio/song.js` | The track, its cover and its map: 132 bpm, sections, silences, every kick and snare, and loudness. Regenerate the map with `python3 tools/songmap.py audio/aloneagain.mp3 audio/song.js` (needs ffmpeg, numpy, scipy). |
+| `avatar3d.js`, `rig.js` | The 3D avatar: loads `avatar/`, rigs it and animates it. |
+| `tools/fetch-avatar.mjs`, `.github/workflows/bake-avatar.yml` | The avatar bake. |
 
-By default the 3D avatar is a blocky R6 built from your live Roblox body colours. It also picks up a headless head, a Korblox leg, horns, crowns and Valkyries from what you're wearing, and samples your shirt and pants colours from your 2D render when the CDN allows it.
-
-To put your **real** avatar mesh in, with clothes, accessories and all, bake it once. Roblox's 3D endpoint needs auth, and its CDN has no CORS, so a browser can't fetch it live:
-
-```sh
-ROBLOX_API_KEY=your-open-cloud-key node tools/fetch-avatar.mjs
-# or: ROBLOX_COOKIE=your-.ROBLOSECURITY-value node tools/fetch-avatar.mjs
-```
-
-It needs Node 18+. The API key is an Open Cloud key with *thumbnail:read* (create.roblox.com → Open Cloud → API keys). The script writes `avatar/` (the OBJ, MTL, textures and `meta.json`); commit that folder. The site loads it from its own origin behind the gate, rigs it onto the same skeleton, and swaps the 2D render in the avatar scene for the 3D one. Re-run it whenever you change your fit. Never commit the key or the cookie.
-
-## Customize
-
-Change IDs, Discord accounts, the original game's numbers and the closet items/prices in the `CONFIG` block at the top of `main.js`. Change the colors in the `:root` tokens in `styles.css`.
+The site is public, so the track can draw a copyright takedown. A song you have rights to is the safe choice.
