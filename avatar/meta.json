@@ -1,0 +1,50 @@
+{
+  "userId": 461323235,
+  "bakedAt": "2026-10-09T20:58:59.920Z",
+  "objFile": "avatar.obj",
+  "mtlFile": "avatar.mtl",
+  "camera": {
+    "position": {
+      "x": 0,
+      "y": 107.456,
+      "z": -14.6151
+    },
+    "direction": {
+      "x": 0,
+      "y": 0.258819,
+      "z": -0.965926
+    },
+    "fov": 28.7843
+  },
+  "aabb": {
+    "min": {
+      "x": -2,
+      "y": 100.01,
+      "z": -1.46978
+    },
+    "max": {
+      "x": 2,
+      "y": 107.07,
+      "z": 1.62189
+    }
+  },
+  "textures": [
+    "30DAY-a56eff78e47120d04c3a323eb48c8472.png",
+    "30DAY-237a6fb8c2d3f5bc3dcc431fe2aa8dd1.png",
+    "30DAY-dfa12ca5d03606f377945711b9212517.png",
+    "30DAY-1e7490eea9af8c6a7762a6276d627e8a.png",
+    "30DAY-e9554cc3b83edf447e80db352c763e08.png",
+    "30DAY-530ce0ec45062f26ba7a047bb77ffb45.png",
+    "30DAY-1537f3053a4f63c26b2214efdd8535e5.png",
+    "30DAY-129950ba8dc11ca8792bd1f61ee673c7.png",
+    "30DAY-e0efd1605246c7829e12ecc8297db49e.png"
+  ],
+  "bodyColor3s": {
+    "headColor3": "f8f8f8",
+    "torsoColor3": "f8f8f8",
+    "rightArmColor3": "f8f8f8",
+    "leftArmColor3": "f8f8f8",
+    "rightLegColor3": "f8f8f8",
+    "leftLegColor3": "f8f8f8"
+  }
+}

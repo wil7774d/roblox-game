@@ -1,0 +1,107 @@
+newmtl Player2Mtl
+Material Color
+Ka 0.972549 0.972549 0.972549
+Kd 0.972549 0.972549 0.972549
+Ks 0.0610227 0.0610227 0.0610227 
+
+d 1
+
+Ns 0
+
+map_Ka 30DAY-237a6fb8c2d3f5bc3dcc431fe2aa8dd1.png
+map_Kd 30DAY-237a6fb8c2d3f5bc3dcc431fe2aa8dd1.png
+
+
+newmtl Player1Mtl
+Material Color
+Ka 0.972549 0.972549 0.972549
+Kd 0.972549 0.972549 0.972549
+Ks 0.0610227 0.0610227 0.0610227 
+
+d 1
+
+Ns 0
+
+map_Ka 30DAY-129950ba8dc11ca8792bd1f61ee673c7.png
+map_Kd 30DAY-129950ba8dc11ca8792bd1f61ee673c7.png
+
+
+newmtl Handle6Mtl
+Material Color
+Ka 0.639216 0.635294 0.647059
+Kd 0.639216 0.635294 0.647059
+Ke 1 1 1
+Ks 0.055148 0.0548097 0.0558247 
+
+d 1
+
+Ns 255
+
+map_Ka 30DAY-e9554cc3b83edf447e80db352c763e08.png
+map_Kd 30DAY-e9554cc3b83edf447e80db352c763e08.png
+
+
+map_Bump 30DAY-a56eff78e47120d04c3a323eb48c8472.png
+
+map_Ns 30DAY-dfa12ca5d03606f377945711b9212517.png
+
+map_Ke 30DAY-530ce0ec45062f26ba7a047bb77ffb45.png
+
+rbx_alphamode overlay
+
+newmtl Handle4Mtl
+Material Color
+Ka 0.639216 0.635294 0.647059
+Kd 0.639216 0.635294 0.647059
+Ks 0.0401077 0.0398616 0.0405998 
+
+d 1
+
+Ns 0
+
+map_Ka 30DAY-237a6fb8c2d3f5bc3dcc431fe2aa8dd1.png
+map_Kd 30DAY-237a6fb8c2d3f5bc3dcc431fe2aa8dd1.png
+
+
+newmtl Handle3Mtl
+Material Color
+Ka 0.639216 0.635294 0.647059
+Kd 0.639216 0.635294 0.647059
+Ks 0.0401077 0.0398616 0.0405998 
+
+d 1
+
+Ns 0
+
+map_Ka 30DAY-1e7490eea9af8c6a7762a6276d627e8a.png
+map_Kd 30DAY-1e7490eea9af8c6a7762a6276d627e8a.png
+
+
+newmtl Handle2Mtl
+Material Color
+Ka 0.639216 0.635294 0.647059
+Kd 0.639216 0.635294 0.647059
+Ks 0.0401077 0.0398616 0.0405998 
+
+d 1
+
+Ns 0
+
+map_Ka 30DAY-1537f3053a4f63c26b2214efdd8535e5.png
+map_Kd 30DAY-1537f3053a4f63c26b2214efdd8535e5.png
+
+
+newmtl Handle1Mtl
+Material Color
+Ka 0.639216 0.635294 0.647059
+Kd 0.639216 0.635294 0.647059
+Ks 0.0401077 0.0398616 0.0405998 
+
+d 1
+
+Ns 0
+
+map_Ka 30DAY-e0efd1605246c7829e12ecc8297db49e.png
+map_Kd 30DAY-e0efd1605246c7829e12ecc8297db49e.png
+
+
